@@ -1,57 +1,67 @@
-# MCP v2 Visual Verification
+<p align="center">
+  <img src="./assets/mcp-v2-lab-cover.png" alt="MCP v2 Lab：协议、Apps、Skills 与 Codex 实验封面" width="100%" />
+</p>
 
-一个使用 Bun workspace、MCP TypeScript SDK v2、Rsbuild、React 和 TypeScript 7
-实现的可视化协议验证 Demo。
+# MCP v2 实验场
 
-## 边界
+这是个能直接跑起来的 MCP v2 实验仓库。协议、MCP App、Skills 和 Codex
+会话被放进同一条验证链路。哪些已经可用，哪些还卡在客户端，都直接写在下面。
 
-- 只支持 MCP `2026-07-28` modern era。
-- Server 以 v2 内置 `legacy: "stateless"` 兼容 2025-era Streamable HTTP
-  Client；不启用旧 SSE Transport。
-- 不安装 MCP SDK v1 或 legacy package。
-- 不提供 SSE endpoint，不安装 `server-legacy`，不实现
-  `subscriptions/listen`。
-- 所有验证状态均来自真实请求或测试结果。
+## 实验内容
 
-## Workspace
+| 实验 | 做法 | 当前结果 |
+| --- | --- | --- |
+| MCP v2 Server | `@modelcontextprotocol/server@2.0.0`，协议版本 `2026-07-28` | 已通过 |
+| 无 SSE 传输 | Streamable HTTP + JSON response | 已通过 |
+| 旧 Codex 兼容 | v2 内置 `legacy: "stateless"`，不安装 `server-legacy` | Codex CLI `0.145.0` 可调用 |
+| Skills | `skills.discover`、`skills.run` | 真实 Codex 会话已通过 |
+| MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过 |
+| 参数化 Dashboard | `view`、`status`、`query` 驱动 shadcn/ui 界面 | 桌面浏览器与 390px 已通过 |
+| Codex 会话验收 | 新会话直接调用 Tool，并记录脱敏证据 | 已通过 |
 
-- `apps/web`：验证中心与真实 MCP App Host（发现 Tool 元数据、读取
-  `ui://` Resource、sandbox iframe、JSON-RPC bridge）。
-- `apps/mcp-app`：使用 Rsbuild、React、Tailwind CSS 和 shadcn/ui
-  组件源码构建的单文件订单 Dashboard MCP App。
-- `services/mcp`：Bun MCP Server 与会话验收。
-- `packages/shared`：共享契约。
-- `docs/implementation-plan.md`：完整实施和验收计划。
+`orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
+Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
+`structuredContent` 后切换视图。
 
-## Commands
+```json
+{
+  "view": "orders",
+  "status": "paid"
+}
+```
+
+这组参数会返回一条演示订单 `ord_demo_1001`。Codex CLI 能拿到结果；
+当前 Codex Desktop 还没有把 MCP App 真正渲染到会话里。仓库里的 Web Host
+已经跑通完整界面链路，但两者不能混为一谈。
+
+## 运行
 
 ```bash
 bun install
 bun run dev
-bun run typecheck
-bun run test
-bun run build
+```
+
+- 验证中心：<http://localhost:3000/>
+- MCP Server：<http://localhost:3001/mcp>
+
+完整验收：
+
+```bash
 bun run acceptance
 ```
 
-当前验证证据见 `docs/verification-report.md`。
+它会执行 TypeScript 7 类型检查、Bun 测试、Rsbuild 构建、HTTP
+验收、Playwright 桌面与移动端验收，以及面向 Codex 的客户端调用链。
 
-`orders.dashboard` 支持参数驱动渲染：
+## 目录
 
-- `view`：`overview | orders | status`
-- `status`：`all | paid | pending | fulfilled`
-- `query`：可选的演示订单搜索词
-
-MCP App 内部的 Tabs 和 Select 会通过 Host bridge 反向调用
-`orders.dashboard`，并用新的 `structuredContent` 动态切换界面。
-
-> `acceptance:codex` 验证的是面向 Codex 的 MCP Client 调用链，不代表
-> Codex Desktop 已加载该 MCP Server 或已经渲染 App UI。任务内 UI 必须在
-> Codex 宿主中单独验收。
-
-开发阶段可分别运行：
-
-```bash
-bun run dev:mcp
-bun run dev:web
+```text
+apps/mcp-app   shadcn/ui MCP App，构建为单文件 HTML
+apps/web       可视化验证中心与 MCP App Host
+services/mcp   Bun MCP Server、Tool、Resource 和验收脚本
+packages/shared
+               共享契约与测试夹具
 ```
+
+详细结果见 [验证报告](./docs/verification-report.md)，实现范围见
+[实施计划](./docs/implementation-plan.md)。
