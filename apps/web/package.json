@@ -1,0 +1,26 @@
+{
+  "name": "@mcp-v2/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev --host 0.0.0.0",
+    "build": "rsbuild build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test test",
+    "acceptance:browser": "playwright test"
+  },
+  "dependencies": {
+    "@rsbuild/core": "^2.0.0",
+    "@rsbuild/plugin-react": "^2.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "7.0.2"
+  }
+}

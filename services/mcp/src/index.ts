@@ -1,0 +1,56 @@
+import { mcpHandler } from "./server.ts";
+import {
+  MODERN_PROTOCOL_VERSION,
+  discoverSkills,
+  listOrders,
+  listVerificationRuns,
+  statusVerification,
+} from "./domain.ts";
+import { runVerification } from "./verification-runner.ts";
+
+const port = Number.parseInt(Bun.env.PORT ?? "3001", 10);
+
+function json(value: unknown, status = 200): Response {
+  return Response.json(value, { status, headers: { "cache-control": "no-store" } });
+}
+
+export const app = {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/mcp") return mcpHandler.fetch(request);
+    if (request.method === "POST" && url.pathname === "/api/verification/run") {
+      try {
+        return json(await runVerification(new URL("/mcp", url), "web-verification-center"));
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "Verification failed" }, 500);
+      }
+    }
+    if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+    if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "reject", sse: false });
+    if (url.pathname === "/api/orders") return json({ orders: listOrders(url.searchParams.get("query") ?? undefined) });
+    if (url.pathname === "/api/skills") return json({ skills: discoverSkills() });
+    if (url.pathname === "/api/demo/tools") {
+      return json({
+        tools: [
+          "system.health",
+          "orders.search",
+          "skills.discover",
+          "skills.run",
+          "verification.start",
+          "verification.status",
+          "verification.finish",
+        ],
+      });
+    }
+    if (url.pathname === "/api/demo/skills") return json({ skills: discoverSkills() });
+    if (url.pathname === "/api/verification/runs") return json({ runs: listVerificationRuns() });
+    if (url.pathname.startsWith("/api/verification/")) {
+      const runId = url.pathname.slice("/api/verification/".length);
+      const run = statusVerification(runId);
+      return run === undefined ? json({ error: "Verification run not found" }, 404) : json(run);
+    }
+    return json({ error: "Not found" }, 404);
+  }
+};
+
+if (import.meta.main) Bun.serve({ hostname: "0.0.0.0", port, fetch: app.fetch });

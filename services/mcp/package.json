@@ -1,0 +1,25 @@
+{
+  "name": "@mcp-v2/demo-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "bunx --bun tsc --noEmit",
+    "test": "bun test",
+    "build": "bunx --bun tsc --noEmit",
+    "acceptance:http": "bun scripts/acceptance-http.ts",
+    "acceptance:codex": "bun scripts/acceptance-codex.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "7.0.2"
+  }
+}

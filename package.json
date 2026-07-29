@@ -1,0 +1,27 @@
+{
+  "name": "mcp-v2-visual-verification",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "dev:web": "bun run --cwd apps/web dev",
+    "dev:mcp": "bun run --cwd services/mcp dev",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "build": "bun run --filter '*' build",
+    "acceptance:http": "bun run --cwd services/mcp acceptance:http",
+    "acceptance:browser": "bun run --cwd apps/web acceptance:browser",
+    "acceptance:codex": "bun run --cwd services/mcp acceptance:codex",
+    "acceptance": "bun run typecheck && bun run test && bun run build && bun run acceptance:http && bun run acceptance:browser && bun run acceptance:codex"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "7.0.2"
+  }
+}
