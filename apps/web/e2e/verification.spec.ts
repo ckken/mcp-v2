@@ -23,11 +23,14 @@ test("runs a real modern-only verification and renders its evidence", async ({ p
 test("renders the sandboxed MCP App bridge and remains usable at 390px", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "MCP Apps" }).click();
-  await expect(page.getByText("Sandbox app handshake received")).toBeVisible();
+  await expect(page.getByText("Tool result delivered to ui:// resource")).toBeVisible();
+  await expect(page.getByText("ui://mcp-v2/orders-dashboard.html")).toBeVisible();
+  await expect(page.getByText("text/html;profile=mcp-app")).toBeVisible();
 
-  const frame = page.frameLocator('iframe[title="Sandbox MCP App demo"]');
-  await frame.getByRole("button", { name: "Send bridge event" }).click();
-  await expect(page.getByText(/Sandbox app sent an event/)).toBeVisible();
+  const frame = page.frameLocator('iframe[title="MCP App orders dashboard"]');
+  await expect(frame.getByText("3 demo orders returned by orders.dashboard")).toBeVisible();
+  await frame.getByRole("button", { name: "Call orders.dashboard" }).click();
+  await expect(page.getByText("Widget called orders.dashboard through host")).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);

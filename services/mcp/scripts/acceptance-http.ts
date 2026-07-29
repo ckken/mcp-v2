@@ -28,9 +28,21 @@ async function main() {
     );
     await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
     const tools = await client.listTools();
-    for (const name of ["system.health", "orders.search", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"]) {
+    for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"]) {
       assert(tools.tools.some((tool) => tool.name === name), `missing ${name}`);
     }
+    const dashboard = tools.tools.find((tool) => tool.name === "orders.dashboard");
+    const dashboardMeta = dashboard?._meta as { ui?: { resourceUri?: string } } | undefined;
+    assert(dashboardMeta?.ui?.resourceUri === "ui://mcp-v2/orders-dashboard.html", "orders.dashboard must link its ui:// resource");
+    const appUri = dashboardMeta.ui.resourceUri;
+    const resources = await client.listResources();
+    assert(resources.resources.some((resource) => resource.uri === appUri), "MCP App resource must be discoverable");
+    const appResource = await client.readResource({ uri: appUri });
+    const appContent = appResource.contents[0];
+    assert(appContent?.mimeType === "text/html;profile=mcp-app", "MCP App resource must use the MCP Apps MIME type");
+    assert(appContent !== undefined && "text" in appContent && appContent.text.includes("ui/initialize"), "MCP App resource must contain the UI bridge");
+    const dashboardResult = await client.callTool({ name: "orders.dashboard", arguments: {} });
+    assert(Array.isArray((dashboardResult.structuredContent as { orders?: unknown[] }).orders), "orders.dashboard must return structured UI data");
     const start = await client.callTool({ name: "verification.start", arguments: {} });
     const run = start.structuredContent as { runId: string };
     assert(typeof run.runId === "string", "verification.start must return runId");

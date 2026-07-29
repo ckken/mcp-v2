@@ -7,6 +7,7 @@ import {
   statusVerification,
 } from "./domain.ts";
 import { runVerification } from "./verification-runner.ts";
+import { callMcpAppTool, loadMcpApp } from "./mcp-app-host.ts";
 
 const port = Number.parseInt(Bun.env.PORT ?? "3001", 10);
 
@@ -18,6 +19,16 @@ export const app = {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/mcp") return mcpHandler.fetch(request);
+    if (request.method === "POST" && url.pathname === "/api/mcp-app/call") {
+      try {
+        const body = await request.json() as { name?: unknown; arguments?: unknown };
+        if (typeof body.name !== "string") return json({ error: "Tool name is required" }, 400);
+        const args = body.arguments && typeof body.arguments === "object" ? body.arguments as Record<string, unknown> : {};
+        return json(await callMcpAppTool(new URL("/mcp", url), body.name, args));
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "MCP App tool call failed" }, 400);
+      }
+    }
     if (request.method === "POST" && url.pathname === "/api/verification/run") {
       try {
         return json(await runVerification(new URL("/mcp", url), "web-verification-center"));
@@ -27,6 +38,13 @@ export const app = {
     }
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
     if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "reject", sse: false });
+    if (url.pathname === "/api/mcp-app") {
+      try {
+        return json(await loadMcpApp(new URL("/mcp", url)));
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "MCP App load failed" }, 500);
+      }
+    }
     if (url.pathname === "/api/orders") return json({ orders: listOrders(url.searchParams.get("query") ?? undefined) });
     if (url.pathname === "/api/skills") return json({ skills: discoverSkills() });
     if (url.pathname === "/api/demo/tools") {
@@ -34,6 +52,7 @@ export const app = {
         tools: [
           "system.health",
           "orders.search",
+          "orders.dashboard",
           "skills.discover",
           "skills.run",
           "verification.start",

@@ -13,7 +13,8 @@
 
 ## Workspace
 
-- `apps/web`：验证中心与 MCP App Host。
+- `apps/web`：验证中心与真实 MCP App Host（发现 Tool 元数据、读取
+  `ui://` Resource、sandbox iframe、JSON-RPC bridge）。
 - `services/mcp`：Bun MCP Server 与会话验收。
 - `packages/shared`：共享契约。
 - `docs/implementation-plan.md`：完整实施和验收计划。
@@ -30,6 +31,10 @@ bun run acceptance
 ```
 
 当前验证证据见 `docs/verification-report.md`。
+
+> `acceptance:codex` 验证的是面向 Codex 的 MCP Client 调用链，不代表
+> Codex Desktop 已加载该 MCP Server 或已经渲染 App UI。任务内 UI 必须在
+> Codex 宿主中单独验收。
 
 开发阶段可分别运行：
 

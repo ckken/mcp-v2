@@ -20,21 +20,28 @@
 - modern-only HTTP acceptance。
 - 4 项 Playwright 浏览器验收。
 - 桌面 Chromium 与 390px Chromium。
-- sandbox MCP App `postMessage` bridge。
+- `orders.dashboard` 的 `_meta.ui.resourceUri`。
+- `ui://mcp-v2/orders-dashboard.html` Resource 与
+  `text/html;profile=mcp-app` MIME。
+- sandbox MCP App JSON-RPC `postMessage` bridge、初始结果回流和组件内
+  Tool 反向调用。
 - JSON HTTP、legacy reject 和 no-SSE 断言。
-- Codex session acceptance。
+- Codex-oriented MCP Client acceptance。
 
 ## 独立 Codex 会话
 
-- Codex task：独立新建任务已完成
-- 验证 run：`run_97e68cb8c7c1441a`
-- 结果：`passed`
-- 协议：`2026-07-28`
-- legacy：`reject`
-- SSE：`false`
-- 人工确认：已记录
+- 旧任务仅执行 `bun run acceptance:codex`，不是 Codex 直接调用 MCP
+  Tool，也没有验证 App UI；该结果已作废。
+- 重新新建的 Codex task `019fadc4-f5b7-7493-b2d4-304773a8d4aa`
+  未发现 `mcp-v2-demo` 工具，因此 Tool 调用与任务内 App UI 均未通过。
+- 另用全新 `codex exec` 进程验证，Codex 以 `2025-06-18` 发起握手，
+  v2-only Server 正确拒绝并返回 `-32022 Unsupported protocol version`
+  （Server 只支持 `2026-07-28`）。
+- 为避免留下无法初始化的全局配置，验收后已移除
+  `mcp-v2-demo` Codex MCP 配置。
+- 当前不能把 Web Host 的 App UI 成功等同于 Codex 任务内 UI 成功。
 
-服务端记录的真实步骤：
+`acceptance:codex` 仍会记录以下真实 Client 调用步骤：
 
 1. `system.health`
 2. `skills.discover`

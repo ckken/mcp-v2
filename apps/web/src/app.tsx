@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { asRuns, type VerificationRunView } from "./runs";
 
 type Health = "online" | "unavailable" | "checking";
@@ -12,14 +12,13 @@ const protocolRows = [
   ["legacy reject", "Legacy protocol requests fail explicitly", "required"],
   ["application/json", "Responses must not use text/event-stream", "required"],
 ];
-const demoTools = ["system.health", "orders.search", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
+const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
 const demoSkills = ["skills.discover", "skills.run"];
 
 export function App() {
   const [page, setPage] = useState<Page>("Overview");
   const [health, setHealth] = useState<Health>("checking");
   const [runs, setRuns] = useState<Run[]>([]);
-  const [message, setMessage] = useState("Waiting for MCP App bridge…");
   const [refreshing, setRefreshing] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -62,16 +61,6 @@ export function App() {
   };
 
   useEffect(() => { void refresh(); }, []);
-  useEffect(() => {
-    const listener = (event: MessageEvent<unknown>) => {
-      if (!event.data || typeof event.data !== "object") return;
-      const data = event.data as { type?: unknown; text?: unknown };
-      if (data.type === "mcp-app/ready") setMessage(typeof data.text === "string" ? data.text : "Sandbox app connected");
-    };
-    window.addEventListener("message", listener);
-    return () => window.removeEventListener("message", listener);
-  }, []);
-
   const passed = useMemo(() => runs.filter((run) => run.status === "passed").length, [runs]);
   const active = useMemo(() => runs.filter((run) => run.status === "running").length, [runs]);
 
@@ -90,7 +79,7 @@ export function App() {
       {page === "Protocol" && <Protocol />}
       {page === "Tools" && <Catalog title="Tool registry" items={demoTools} endpoint="/api/demo/tools" />}
       {page === "Skills" && <Catalog title="Skill registry" items={demoSkills} endpoint="/api/demo/skills" />}
-      {page === "MCP Apps" && <McpApps message={message} />}
+      {page === "MCP Apps" && <McpApps />}
       {page === "Codex Session" && <Session runs={runs} />}
     </section>
   </main>;
@@ -113,9 +102,63 @@ function Catalog({ title, items, endpoint }: { title: string; items: string[]; e
   return <section className="panel"><div className="panel-head"><div><p className="eyebrow">DISCOVERY</p><h3>{title}</h3></div><code>{endpoint}</code></div><div className="catalog">{items.map((item) => <article key={item}><span className="terminal">⌘</span><div><strong>{item}</strong><p>Awaiting server-provided detail</p></div><span className="badge">demo</span></article>)}</div><p className="muted protocol-note">{available === true ? "Demo endpoint responded; entries remain explicitly marked as demo." : available === false ? "Demo endpoint unavailable — no server result is being shown." : "Checking demo endpoint…"}</p></section>;
 }
 
-function McpApps({ message }: { message: string }) {
-  const srcDoc = `<!doctype html><html><body style="margin:0;background:#10121b;color:#e7e9f5;font:14px system-ui;display:grid;place-items:center;height:100vh"><button id="send" style="background:#a5b4fc;border:0;border-radius:8px;padding:10px 14px;color:#11152a;font-weight:700">Send bridge event</button><script>parent.postMessage({type:'mcp-app/ready',text:'Sandbox app handshake received'},'*');document.getElementById('send').onclick=()=>parent.postMessage({type:'mcp-app/ready',text:'Sandbox app sent an event at '+new Date().toLocaleTimeString()},'*');<\/script></body></html>`;
-  return <section className="apps-grid"><div className="panel bridge"><p className="eyebrow">POSTMESSAGE BRIDGE</p><h3>Sandboxed MCP App</h3><p className="muted">The embedded app has no same-origin access. It communicates only through a typed postMessage event.</p><div className="bridge-event"><span className="dot checking"/>{message}</div><code>mcp-app/ready</code></div><iframe title="Sandbox MCP App demo" sandbox="allow-scripts" srcDoc={srcDoc} /></section>;
+function McpApps() {
+  const [app, setApp] = useState<{
+    descriptor: { name: string; _meta?: { ui?: { resourceUri?: string } } };
+    resource: { uri: string; mimeType?: string; text: string };
+    toolResult: { structuredContent?: unknown };
+  } | null>(null);
+  const [message, setMessage] = useState("Resolving Tool → ui:// Resource…");
+  const frameRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    void fetch("/api/mcp-app", { headers: { accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((payload) => setApp(payload))
+      .catch((error) => setMessage(error instanceof Error ? error.message : "MCP App unavailable"));
+  }, []);
+
+  useEffect(() => {
+    const listener = async (event: MessageEvent<unknown>) => {
+      if (event.source !== frameRef.current?.contentWindow || !event.data || typeof event.data !== "object") return;
+      const rpc = event.data as { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
+      if (rpc.jsonrpc !== "2.0" || typeof rpc.method !== "string") return;
+      if (rpc.method === "ui/initialize") {
+        frameRef.current?.contentWindow?.postMessage({
+          jsonrpc: "2.0",
+          id: rpc.id,
+          result: { protocolVersion: "2026-01-26", hostInfo: { name: "mcp-v2-visual-host", version: "0.1.0" }, hostCapabilities: {} },
+        }, "*");
+        setMessage("MCP Apps bridge initialized");
+      } else if (rpc.method === "ui/notifications/initialized") {
+        frameRef.current?.contentWindow?.postMessage({
+          jsonrpc: "2.0",
+          method: "ui/notifications/tool-result",
+          params: app?.toolResult ?? {},
+        }, "*");
+        setMessage("Tool result delivered to ui:// resource");
+      } else if (rpc.method === "tools/call" && typeof rpc.id === "number") {
+        const params = rpc.params as { name?: unknown; arguments?: unknown } | undefined;
+        const response = await fetch("/api/mcp-app/call", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ name: params?.name, arguments: params?.arguments ?? {} }),
+        });
+        const result = await response.json();
+        frameRef.current?.contentWindow?.postMessage(response.ok
+          ? { jsonrpc: "2.0", id: rpc.id, result }
+          : { jsonrpc: "2.0", id: rpc.id, error: { code: -32000, message: result.error ?? "Tool call failed" } }, "*");
+        setMessage(response.ok ? "Widget called orders.dashboard through host" : "Widget tool call failed");
+      }
+    };
+    window.addEventListener("message", listener);
+    return () => window.removeEventListener("message", listener);
+  }, [app]);
+
+  return <section className="apps-grid"><div className="panel bridge"><p className="eyebrow">REAL MCP APPS CHAIN</p><h3>Tool-linked sandbox resource</h3><p className="muted">The host discovers tool metadata, reads the ui:// resource over MCP, then delivers the tool result over the JSON-RPC postMessage bridge.</p><div className="bridge-event"><span className="dot checking"/>{message}</div><code>{app?.descriptor._meta?.ui?.resourceUri ?? "ui:// resolving"}</code><code>{app?.resource.mimeType ?? "MIME resolving"}</code></div>{app && <iframe ref={frameRef} title="MCP App orders dashboard" sandbox="allow-scripts" srcDoc={app.resource.text} />}</section>;
 }
 
 function Session({ runs }: { runs: Run[] }) {
