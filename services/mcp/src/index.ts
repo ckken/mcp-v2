@@ -37,7 +37,7 @@ export const app = {
       }
     }
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
-    if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "reject", sse: false });
+    if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false });
     if (url.pathname === "/api/mcp-app") {
       try {
         return json(await loadMcpApp(new URL("/mcp", url)));

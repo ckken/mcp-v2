@@ -12,15 +12,19 @@ async function main() {
     const statusResponse = await fetch(`${baseUrl}/api/status`);
     assert(statusResponse.headers.get("content-type")?.includes("application/json"), "status must be JSON");
     const status = await statusResponse.json() as { protocolVersion: string; legacy: string; sse: boolean };
-    assert(status.protocolVersion === "2026-07-28" && status.legacy === "reject" && status.sse === false, "status must advertise modern JSON-only mode");
+    assert(status.protocolVersion === "2026-07-28" && status.legacy === "stateless" && status.sse === false, "status must advertise modern mode with stateless compatibility");
 
-    const legacy = await fetch(`${baseUrl}/mcp`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
-    });
-    assert(legacy.headers.get("content-type")?.includes("text/event-stream") !== true, "legacy rejection must not use SSE");
-    assert(legacy.status >= 400 || (await legacy.text()).includes("Unsupported protocol"), "legacy initialize must be rejected");
+    const legacyClient = new Client(
+      { name: "mcp-v2-legacy-acceptance", version: "0.1.0" },
+      { versionNegotiation: { mode: "legacy" } }
+    );
+    await legacyClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
+    const legacyTools = await legacyClient.listTools();
+    assert(legacyTools.tools.some((tool) => tool.name === "orders.dashboard"), "legacy client must discover orders.dashboard");
+    const legacyDashboard = await legacyClient.callTool({ name: "orders.dashboard", arguments: {} });
+    assert(Array.isArray((legacyDashboard.structuredContent as { orders?: unknown[] }).orders), "legacy client must call orders.dashboard");
+    assert(legacyDashboard._meta?.["openai/outputTemplate"] === "ui://mcp-v2/orders-dashboard.html", "legacy result must expose the UI template");
+    await legacyClient.close();
 
     const client = new Client(
       { name: "mcp-v2-http-acceptance", version: "0.1.0" },
@@ -43,6 +47,7 @@ async function main() {
     assert(appContent !== undefined && "text" in appContent && appContent.text.includes("ui/initialize"), "MCP App resource must contain the UI bridge");
     const dashboardResult = await client.callTool({ name: "orders.dashboard", arguments: {} });
     assert(Array.isArray((dashboardResult.structuredContent as { orders?: unknown[] }).orders), "orders.dashboard must return structured UI data");
+    assert(dashboardResult._meta?.["openai/outputTemplate"] === "ui://mcp-v2/orders-dashboard.html", "modern result must expose the UI template");
     const start = await client.callTool({ name: "verification.start", arguments: {} });
     const run = start.structuredContent as { runId: string };
     assert(typeof run.runId === "string", "verification.start must return runId");

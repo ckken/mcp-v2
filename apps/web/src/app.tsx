@@ -9,7 +9,7 @@ const pages: Page[] = ["Overview", "Protocol", "Tools", "Skills", "MCP Apps", "C
 const protocolRows = [
   ["server/discover", "Modern capability discovery", "required"],
   ["request envelope", "Protocol version on every request", "required"],
-  ["legacy reject", "Legacy protocol requests fail explicitly", "required"],
+  ["legacy fallback", "2025-era clients use stateless JSON HTTP", "enabled"],
   ["application/json", "Responses must not use text/event-stream", "required"],
 ];
 const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];

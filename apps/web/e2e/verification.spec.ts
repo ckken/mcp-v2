@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("runs a real modern-only verification and renders its evidence", async ({ page }) => {
+test("runs a real v2-first verification and renders its evidence", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Service reachable")).toBeVisible();
 
@@ -15,7 +15,7 @@ test("runs a real modern-only verification and renders its evidence", async ({ p
   expect(statusResponse.headers()["content-type"]).not.toContain("text/event-stream");
   await expect(statusResponse.json()).resolves.toMatchObject({
     protocolVersion: "2026-07-28",
-    legacy: "reject",
+    legacy: "stateless",
     sse: false,
   });
 });

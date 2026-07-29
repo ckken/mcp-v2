@@ -5,13 +5,13 @@ import {
 } from "../src/index.ts";
 
 describe("shared runtime contracts", () => {
-  test("accepts the modern JSON-only health fixture", () => {
+  test("accepts the v2-first JSON-only compatibility fixture", () => {
     expect(serviceHealthSchema.parse(serviceHealthFixture).protocol).toEqual({
-      version: "2026-07-28", modernOnly: true, legacy: "reject", transport: "json-http", sse: false,
+      version: "2026-07-28", modernOnly: false, legacy: "stateless", transport: "json-http", sse: false,
     });
   });
 
-  test("rejects legacy and SSE protocol declarations", () => {
+  test("rejects SSE protocol declarations", () => {
     expect(serviceHealthSchema.safeParse({
       ...serviceHealthFixture, protocol: { ...serviceHealthFixture.protocol, sse: true },
     }).success).toBeFalse();

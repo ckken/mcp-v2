@@ -3,7 +3,8 @@
 ## 目标
 
 使用 Bun workspace 和 Bun 包管理，从零实现一个只支持 MCP `2026-07-28`
-modern era 的可视化 Demo。服务端拒绝 legacy 协议，不提供 SSE
+modern era 的可视化 Demo。服务端以 v2 内置 stateless fallback 兼容
+2025-era Streamable HTTP Client，但不提供 legacy SSE
 端点，不实现 `subscriptions/listen`。前端使用 Rsbuild 2、React 19 和
 TypeScript 7。
 
@@ -18,7 +19,8 @@ TypeScript 7。
 - 包管理、workspace、脚本和脚手架统一使用 Bun；不使用 npm、pnpm、yarn 或 npx。
 - MCP 依赖只使用 `@modelcontextprotocol/*@2`，不安装 v1
   `@modelcontextprotocol/sdk` 或 `server-legacy`。
-- Client 固定 `2026-07-28`；Server 使用 `legacy: "reject"`。
+- v2 Client 固定 `2026-07-28`；Server 使用 `legacy: "stateless"`，
+  并以 `2025-06-18` Client 做独立兼容验收。
 - 所有 Demo MCP 请求使用 JSON HTTP；验收必须断言未出现
   `text/event-stream`。
 - MCP Apps 使用 `ui://` Resource、sandbox iframe 和最小
@@ -40,8 +42,8 @@ tests/e2e         真实浏览器验收
 
 前端必须由真实请求驱动，不允许硬编码通过状态。主要页面：
 
-- 总览：服务状态、modern-only、功能矩阵、最近验收。
-- Protocol：discover、capability、headers、JSON-only、legacy reject。
+- 总览：服务状态、v2-first、功能矩阵、最近验收。
+- Protocol：discover、capability、headers、JSON-only、stateless fallback。
 - Tools：Schema 表单、调用结果、错误和耗时。
 - Resources / Prompts：列表、读取、缓存、模板和参数。
 - Multi-round：`inputRequired` 确认、拒绝和重入。
@@ -86,7 +88,7 @@ bun run acceptance
 - Rsbuild 生产构建通过。
 - MCP HTTP 集成验证通过。
 - 浏览器可视化验证通过。
-- modern-only 和 legacy reject 通过。
+- v2 `2026-07-28` 与 legacy `2025-06-18` stateless 验收均通过。
 - 所有 MCP 响应均非 SSE。
 - MCP App iframe bridge 通过。
 - 新建 Codex 会话调用链通过。
@@ -100,4 +102,3 @@ bun run acceptance
 5. 完成浏览器自动化验收。
 6. 新建 Codex 会话，连接本地 Server，完成 `verification.finish`。
 7. 将脱敏结果回显到前端 Codex Session 页面。
-

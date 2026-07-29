@@ -12,20 +12,28 @@ import {
 } from "./domain.ts";
 import { MCP_APP_MIME_TYPE, ORDERS_APP_URI, ordersAppHtml } from "./mcp-app.ts";
 
-type ToolResult = { content: [{ type: "text"; text: string }]; structuredContent: unknown };
+type ToolResult = {
+  content: [{ type: "text"; text: string }];
+  structuredContent: unknown;
+  _meta?: Record<string, unknown>;
+};
 
-function result(value: unknown): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
+function result(value: unknown, meta?: Record<string, unknown>): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify(value) }],
+    structuredContent: value,
+    ...(meta === undefined ? {} : { _meta: meta }),
+  };
 }
 
-function tool<T extends object>(name: string, handler: (args: T) => unknown) {
+function tool<T extends object>(name: string, handler: (args: T) => unknown, resultMeta?: Record<string, unknown>) {
   return async (args: T): Promise<ToolResult> => {
     const startedAt = Date.now();
     const runId = "runId" in args && typeof args.runId === "string" ? args.runId : undefined;
     try {
       const value = handler(args);
       recordEvidence(runId, name, startedAt, "ok");
-      return result(value);
+      return result(value, resultMeta);
     } catch (error) {
       recordEvidence(runId, name, startedAt, "error");
       throw error;
@@ -57,7 +65,7 @@ export function createDemoMcpServer() {
       }],
     }),
   );
-  server.registerTool("system.health", { description: "Return modern-only server health", inputSchema: z.object({ runId: z.string().optional() }) }, tool("system.health", () => ({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", sse: false })));
+  server.registerTool("system.health", { description: "Return v2-first server health", inputSchema: z.object({ runId: z.string().optional() }) }, tool("system.health", () => ({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false })));
   server.registerTool("orders.search", { description: "Search demo orders", inputSchema: z.object({ query: z.string().optional(), runId: z.string().optional() }) }, tool("orders.search", ({ query }) => ({ orders: listOrders(query) })));
   server.registerTool(
     "orders.dashboard",
@@ -72,14 +80,22 @@ export function createDemoMcpServer() {
         "openai/outputTemplate": ORDERS_APP_URI,
       },
     },
-    tool("orders.dashboard", ({ query }) => {
-      const orders = listOrders(query);
-      return {
-        headline: "Orders dashboard",
-        summary: `${orders.length} demo orders returned by orders.dashboard`,
-        orders,
-      };
-    }),
+    tool(
+      "orders.dashboard",
+      ({ query }) => {
+        const orders = listOrders(query);
+        return {
+          headline: "Orders dashboard",
+          summary: `${orders.length} demo orders returned by orders.dashboard`,
+          orders,
+        };
+      },
+      {
+        ui: { resourceUri: ORDERS_APP_URI },
+        "ui/resourceUri": ORDERS_APP_URI,
+        "openai/outputTemplate": ORDERS_APP_URI,
+      },
+    ),
   );
   server.registerTool("skills.discover", { description: "Discover demo application skills", inputSchema: z.object({ runId: z.string().optional() }) }, tool("skills.discover", () => ({ skills: discoverSkills() })));
   server.registerTool("skills.run", { description: "Run a demo application skill", inputSchema: z.object({ skillId: z.string(), orderId: z.string().optional(), runId: z.string().optional() }) }, tool("skills.run", ({ skillId, orderId }) => runSkill(skillId, orderId)));
@@ -93,4 +109,4 @@ export function createDemoMcpServer() {
   return server;
 }
 
-export const mcpHandler = createMcpHandler(createDemoMcpServer, { legacy: "reject", responseMode: "json" });
+export const mcpHandler = createMcpHandler(createDemoMcpServer, { legacy: "stateless", responseMode: "json" });

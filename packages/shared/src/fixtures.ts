@@ -12,7 +12,7 @@ export const capabilityFixture: CapabilityMatrix = {
 
 export const serviceHealthFixture: ServiceHealth = {
   status: "healthy",
-  protocol: { version: "2026-07-28", modernOnly: true, legacy: "reject", transport: "json-http", sse: false },
+  protocol: { version: "2026-07-28", modernOnly: false, legacy: "stateless", transport: "json-http", sse: false },
   capabilities: capabilityFixture,
   checkedAt: fixtureTimestamp,
 };

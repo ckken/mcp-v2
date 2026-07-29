@@ -17,7 +17,7 @@
 - 三个 workspace 的 TypeScript 7 类型检查。
 - 11 项 Bun 单元/契约测试。
 - Rsbuild 生产构建。
-- modern-only HTTP acceptance。
+- v2-first HTTP acceptance。
 - 4 项 Playwright 浏览器验收。
 - 桌面 Chromium 与 390px Chromium。
 - `orders.dashboard` 的 `_meta.ui.resourceUri`。
@@ -25,7 +25,7 @@
   `text/html;profile=mcp-app` MIME。
 - sandbox MCP App JSON-RPC `postMessage` bridge、初始结果回流和组件内
   Tool 反向调用。
-- JSON HTTP、legacy reject 和 no-SSE 断言。
+- JSON HTTP、legacy stateless fallback 和 no-SSE 断言。
 - Codex-oriented MCP Client acceptance。
 
 ## 独立 Codex 会话
@@ -43,9 +43,10 @@
 
 ### Codex 0.147 alpha 复测
 
-- 独立 Codex CLI 已从 `0.145.0` 升级为 `0.147.0-alpha.1`，旧版安装目录
-  保留，可通过切换 standalone `current` 链接回退。
-- 已持久开启 `mcp_2026_07_28` 与 `enable_mcp_apps`。
+- 独立 Codex CLI 曾升级为 `0.147.0-alpha.1` 并完成纯 v2 调用验证；
+  随后按兼容性复测要求回退到 `0.145.0`。
+- `mcp_2026_07_28` 已关闭；`enable_mcp_apps` 保持开启以等待 Desktop
+  重启后复测。
 - 已持久配置 `mcp-v2-demo` Streamable HTTP Server。
 - 新版 CLI 成功使用 `2026-07-28` 发现并直接调用
   `orders.dashboard`，返回 3 条结构化订单数据；不再出现
@@ -55,6 +56,23 @@
   Desktop 内嵌 MCP App UI 尚未通过。
 - 官方 `0.147.0-alpha.1` macOS DMG 经只读挂载核验，仅包含 Codex
   命令行二进制，不包含可独立升级的 Desktop GUI 应用。
+
+### Codex 0.145 兼容复测
+
+- `@modelcontextprotocol/server-legacy` 经安装检查后已移除：它只提供冻结
+  的 v1 SSE Transport 与旧 OAuth helpers，不负责 `2025-06-18`
+  Streamable HTTP 兼容。
+- Server 改用 `@modelcontextprotocol/server@2` 内置
+  `legacy: "stateless"`；没有增加 SSE endpoint。
+- SDK 集成验收同时通过现代 `2026-07-28` 与 legacy
+  `2025-06-18` Client 的工具发现和 `orders.dashboard` 调用。
+- 回退后的 Codex CLI `0.145.0` 成功发现并调用 `orders.dashboard`；
+  Tool 结果携带 `ui.resourceUri`、`ui/resourceUri` 与
+  `openai/outputTemplate`。
+- Desktop task `019fade7-bf9e-7563-afe6-694cc6336f29` 成功调用 Tool
+  并读取 `ui://mcp-v2/orders-dashboard.html`，但任务事件中没有
+  App/widget 渲染事件；因此内嵌 UI 仍标记为未通过，不能用读取 HTML
+  代替实际渲染。
 
 `acceptance:codex` 仍会记录以下真实 Client 调用步骤：
 

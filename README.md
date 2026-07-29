@@ -6,9 +6,11 @@
 ## 边界
 
 - 只支持 MCP `2026-07-28` modern era。
-- Server 拒绝 legacy 请求。
+- Server 以 v2 内置 `legacy: "stateless"` 兼容 2025-era Streamable HTTP
+  Client；不启用旧 SSE Transport。
 - 不安装 MCP SDK v1 或 legacy package。
-- 不提供 SSE endpoint，不实现 `subscriptions/listen`。
+- 不提供 SSE endpoint，不安装 `server-legacy`，不实现
+  `subscriptions/listen`。
 - 所有验证状态均来自真实请求或测试结果。
 
 ## Workspace
