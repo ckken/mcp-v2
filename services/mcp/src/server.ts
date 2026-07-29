@@ -97,8 +97,24 @@ export function createDemoMcpServer() {
       },
     ),
   );
-  server.registerTool("skills.discover", { description: "Discover demo application skills", inputSchema: z.object({ runId: z.string().optional() }) }, tool("skills.discover", () => ({ skills: discoverSkills() })));
-  server.registerTool("skills.run", { description: "Run a demo application skill", inputSchema: z.object({ skillId: z.string(), orderId: z.string().optional(), runId: z.string().optional() }) }, tool("skills.run", ({ skillId, orderId }) => runSkill(skillId, orderId)));
+  server.registerTool(
+    "skills.discover",
+    {
+      description: "Discover demo application skills",
+      inputSchema: z.object({ runId: z.string().optional() }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+    },
+    tool("skills.discover", () => ({ skills: discoverSkills() })),
+  );
+  server.registerTool(
+    "skills.run",
+    {
+      description: "Run a read-only demo application skill",
+      inputSchema: z.object({ skillId: z.string(), orderId: z.string().optional(), runId: z.string().optional() }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+    },
+    tool("skills.run", ({ skillId, orderId }) => runSkill(skillId, orderId)),
+  );
   server.registerTool("verification.start", { description: "Start a desensitized verification run" }, tool("verification.start", () => startVerification()));
   server.registerTool("verification.status", { description: "Read a verification run", inputSchema: z.object({ runId: z.string() }) }, tool("verification.status", ({ runId }) => {
     const run = statusVerification(runId);

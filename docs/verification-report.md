@@ -74,6 +74,17 @@
   App/widget 渲染事件；因此内嵌 UI 仍标记为未通过，不能用读取 HTML
   代替实际渲染。
 
+### Skill 会话复测
+
+- 使用回退后的 Codex CLI `0.145.0` 新建隔离会话，通过
+  `2025-06-18` legacy stateless fallback 直接调用
+  `skills.discover` 与 `skills.run`，没有使用 shell 代替 Tool 调用。
+- 成功发现 `order-summary` 与 `verification-checklist` 两个 Skill。
+- 成功执行 `order-summary`，输入演示订单 `ord_demo_1001`，返回
+  `ord_demo_1001: paid`。
+- 首轮调用因 Tool 缺少安全注解而被 Codex 自动审批取消；补齐只读、
+  非破坏、闭合世界和幂等注解后复测通过。
+
 `acceptance:codex` 仍会记录以下真实 Client 调用步骤：
 
 1. `system.health`
