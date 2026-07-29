@@ -41,6 +41,21 @@
   `mcp-v2-demo` Codex MCP 配置。
 - 当前不能把 Web Host 的 App UI 成功等同于 Codex 任务内 UI 成功。
 
+### Codex 0.147 alpha 复测
+
+- 独立 Codex CLI 已从 `0.145.0` 升级为 `0.147.0-alpha.1`，旧版安装目录
+  保留，可通过切换 standalone `current` 链接回退。
+- 已持久开启 `mcp_2026_07_28` 与 `enable_mcp_apps`。
+- 已持久配置 `mcp-v2-demo` Streamable HTTP Server。
+- 新版 CLI 成功使用 `2026-07-28` 发现并直接调用
+  `orders.dashboard`，返回 3 条结构化订单数据；不再出现
+  `Unsupported protocol version`。
+- 当前运行中的 Codex Desktop 使用应用包内置旧后端，新建 task
+  `019fadde-52d7-7670-b5d7-1443e92961ed` 仍未发现该工具，因此
+  Desktop 内嵌 MCP App UI 尚未通过。
+- 官方 `0.147.0-alpha.1` macOS DMG 经只读挂载核验，仅包含 Codex
+  命令行二进制，不包含可独立升级的 Desktop GUI 应用。
+
 `acceptance:codex` 仍会记录以下真实 Client 调用步骤：
 
 1. `system.health`
