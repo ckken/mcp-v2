@@ -4,13 +4,14 @@ import {
   MODERN_PROTOCOL_VERSION,
   discoverSkills,
   finishVerification,
+  getOrdersDashboard,
   listOrders,
   recordEvidence,
   runSkill,
   startVerification,
   statusVerification
 } from "./domain.ts";
-import { MCP_APP_MIME_TYPE, ORDERS_APP_URI, ordersAppHtml } from "./mcp-app.ts";
+import { getOrdersAppHtml, MCP_APP_MIME_TYPE, ORDERS_APP_URI } from "./mcp-app.ts";
 
 type ToolResult = {
   content: [{ type: "text"; text: string }];
@@ -55,7 +56,7 @@ export function createDemoMcpServer() {
       contents: [{
         uri: uri.href,
         mimeType: MCP_APP_MIME_TYPE,
-        text: ordersAppHtml,
+        text: await getOrdersAppHtml(),
         _meta: {
           ui: {
             prefersBorder: true,
@@ -71,8 +72,12 @@ export function createDemoMcpServer() {
     "orders.dashboard",
     {
       title: "Render orders dashboard",
-      description: "Render the interactive MCP App for demo orders",
-      inputSchema: z.object({ query: z.string().optional() }),
+      description: "Render the interactive shadcn MCP App and switch its dashboard view with Tool parameters",
+      inputSchema: z.object({
+        view: z.enum(["overview", "orders", "status"]).default("overview").describe("Dashboard section to render"),
+        status: z.enum(["all", "paid", "pending", "fulfilled"]).default("all").describe("Order status filter"),
+        query: z.string().optional().describe("Optional demo order search term"),
+      }),
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
       _meta: {
         ui: { resourceUri: ORDERS_APP_URI },
@@ -82,14 +87,11 @@ export function createDemoMcpServer() {
     },
     tool(
       "orders.dashboard",
-      ({ query }) => {
-        const orders = listOrders(query);
-        return {
-          headline: "Orders dashboard",
-          summary: `${orders.length} demo orders returned by orders.dashboard`,
-          orders,
-        };
-      },
+      ({ view, status, query }) => getOrdersDashboard({
+        view,
+        status,
+        ...(query === undefined ? {} : { query }),
+      }),
       {
         ui: { resourceUri: ORDERS_APP_URI },
         "ui/resourceUri": ORDERS_APP_URI,

@@ -9,9 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run --cwd apps/mcp-app build && bun run --filter '*' dev",
     "dev:web": "bun run --cwd apps/web dev",
-    "dev:mcp": "bun run --cwd services/mcp dev",
+    "dev:mcp": "bun run --cwd apps/mcp-app build && bun run --cwd services/mcp dev",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",

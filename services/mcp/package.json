@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:mcp-app": "bun run --cwd ../../apps/mcp-app build",
     "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
+    "start": "bun run build:mcp-app && bun src/index.ts",
     "typecheck": "bunx --bun tsc --noEmit",
     "test": "bun test",
     "build": "bunx --bun tsc --noEmit",
-    "acceptance:http": "bun scripts/acceptance-http.ts",
+    "acceptance:http": "bun run build:mcp-app && bun scripts/acceptance-http.ts",
     "acceptance:codex": "bun scripts/acceptance-codex.ts"
   },
   "dependencies": {

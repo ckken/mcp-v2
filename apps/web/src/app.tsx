@@ -151,7 +151,12 @@ function McpApps() {
         frameRef.current?.contentWindow?.postMessage(response.ok
           ? { jsonrpc: "2.0", id: rpc.id, result }
           : { jsonrpc: "2.0", id: rpc.id, error: { code: -32000, message: result.error ?? "Tool call failed" } }, "*");
-        setMessage(response.ok ? "Widget called orders.dashboard through host" : "Widget tool call failed");
+        const args = params?.arguments && typeof params.arguments === "object"
+          ? params.arguments as { view?: unknown; status?: unknown }
+          : {};
+        setMessage(response.ok
+          ? `Widget called orders.dashboard(view=${String(args.view ?? "overview")}, status=${String(args.status ?? "all")}) through host`
+          : "Widget tool call failed");
       }
     };
     window.addEventListener("message", listener);

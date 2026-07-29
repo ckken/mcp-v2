@@ -14,8 +14,8 @@
 
 `bun run acceptance` 已通过：
 
-- 三个 workspace 的 TypeScript 7 类型检查。
-- 11 项 Bun 单元/契约测试。
+- 四个 workspace 的 TypeScript 7 类型检查。
+- 13 项 Bun 单元/契约测试。
 - Rsbuild 生产构建。
 - v2-first HTTP acceptance。
 - 4 项 Playwright 浏览器验收。
@@ -25,6 +25,10 @@
   `text/html;profile=mcp-app` MIME。
 - sandbox MCP App JSON-RPC `postMessage` bridge、初始结果回流和组件内
   Tool 反向调用。
+- shadcn/ui Dashboard 的 `overview | orders | status` 视图，以及
+  `all | paid | pending | fulfilled` 状态筛选参数。
+- 浏览器内实际执行 `view=orders, status=paid`，返回并渲染唯一匹配的
+  `ord_demo_1001`，桌面与 390px 均通过。
 - JSON HTTP、legacy stateless fallback 和 no-SSE 断言。
 - Codex-oriented MCP Client acceptance。
 
@@ -85,6 +89,18 @@
 - 首轮调用因 Tool 缺少安全注解而被 Codex 自动审批取消；补齐只读、
   非破坏、闭合世界和幂等注解后复测通过。
 
+### 参数化 MCP App 复测
+
+- 独立 Codex CLI 会话 `019fadfc-9740-7382-bbcd-afba5e1809a0`
+  直接调用一次 `orders.dashboard`，参数为
+  `{"view":"orders","status":"paid"}`。
+- Tool 返回 `parameters.view=orders`、`parameters.status=paid`、1 条订单，
+  首条订单为 `ord_demo_1001`，同时保留 `ui://` Resource 元数据。
+- Web Host 将相同参数经 MCP Apps bridge 从 shadcn/ui 组件反向传给
+  Tool，并在 iframe 内动态切换到筛选后的订单表格。
+- Codex CLI 复测验证 Tool 与参数返回，不代表 Codex Desktop 已渲染
+  App UI；Desktop 内嵌 UI 状态仍沿用前述结论。
+
 `acceptance:codex` 仍会记录以下真实 Client 调用步骤：
 
 1. `system.health`
@@ -111,3 +127,5 @@ bun run dev:web
 
 - `artifacts/overview.png`
 - `artifacts/mobile.png`
+- `artifacts/mcp-app-dashboard.png`
+- `artifacts/mcp-app-dashboard-filtered.png`

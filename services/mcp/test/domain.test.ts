@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   finishVerification,
+  getOrdersDashboard,
   listOrders,
   recordEvidence,
   resetDemoStateForTest,
@@ -11,6 +12,20 @@ import {
 test("demo orders can be searched without exposing non-demo data", () => {
   expect(listOrders("northwind")).toEqual([expect.objectContaining({ id: "ord_demo_1002" })]);
   expect(listOrders("missing")).toEqual([]);
+});
+
+test("dashboard parameters switch the returned view and order set", () => {
+  expect(getOrdersDashboard({ view: "orders", status: "paid" })).toMatchObject({
+    headline: "Order explorer",
+    parameters: { view: "orders", status: "paid" },
+    metrics: { orders: 1, revenue: 12800, paid: 1, fulfilled: 0 },
+    orders: [{ id: "ord_demo_1001", status: "paid" }],
+  });
+  expect(getOrdersDashboard({ view: "status", status: "fulfilled" })).toMatchObject({
+    headline: "Fulfillment status",
+    parameters: { view: "status", status: "fulfilled" },
+    metrics: { orders: 1, fulfilled: 1 },
+  });
 });
 
 test("verification only passes after the expected tool chain and confirmation", () => {

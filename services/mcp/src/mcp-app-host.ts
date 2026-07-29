@@ -8,14 +8,17 @@ function createClient(name: string) {
   );
 }
 
-export async function loadMcpApp(mcpUrl: URL) {
+export async function loadMcpApp(
+  mcpUrl: URL,
+  parameters: { view?: "overview" | "orders" | "status"; status?: "all" | "paid" | "pending" | "fulfilled" } = {},
+) {
   const client = createClient("mcp-app-visual-host");
   await client.connect(new StreamableHTTPClientTransport(mcpUrl));
   try {
     const [{ tools }, resource, toolResult] = await Promise.all([
       client.listTools(),
       client.readResource({ uri: ORDERS_APP_URI }),
-      client.callTool({ name: "orders.dashboard", arguments: {} }),
+      client.callTool({ name: "orders.dashboard", arguments: parameters }),
     ]);
     const descriptor = tools.find((tool) => tool.name === "orders.dashboard");
     const content = resource.contents[0];

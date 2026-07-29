@@ -48,6 +48,19 @@ async function main() {
     const dashboardResult = await client.callTool({ name: "orders.dashboard", arguments: {} });
     assert(Array.isArray((dashboardResult.structuredContent as { orders?: unknown[] }).orders), "orders.dashboard must return structured UI data");
     assert(dashboardResult._meta?.["openai/outputTemplate"] === "ui://mcp-v2/orders-dashboard.html", "modern result must expose the UI template");
+    const filteredDashboard = await client.callTool({
+      name: "orders.dashboard",
+      arguments: { view: "orders", status: "paid" },
+    });
+    assert(
+      (filteredDashboard.structuredContent as { parameters?: { view?: string; status?: string } }).parameters?.view === "orders"
+        && (filteredDashboard.structuredContent as { parameters?: { view?: string; status?: string } }).parameters?.status === "paid",
+      "orders.dashboard must preserve dynamic view parameters",
+    );
+    assert(
+      (filteredDashboard.structuredContent as { orders?: unknown[] }).orders?.length === 1,
+      "orders.dashboard must apply the status parameter",
+    );
     const start = await client.callTool({ name: "verification.start", arguments: {} });
     const run = start.structuredContent as { runId: string };
     assert(typeof run.runId === "string", "verification.start must return runId");

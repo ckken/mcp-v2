@@ -30,6 +30,9 @@ const skills = [
 
 const runs = new Map<string, RunEvidence>();
 
+export type DashboardView = "overview" | "orders" | "status";
+export type DashboardStatus = "all" | "paid" | "pending" | "fulfilled";
+
 function now(): string {
   return new Date().toISOString();
 }
@@ -43,6 +46,41 @@ export function listOrders(query?: string) {
   return term === undefined || term === ""
     ? orders
     : orders.filter((order) => `${order.id} ${order.customer} ${order.status}`.toLowerCase().includes(term));
+}
+
+export function getOrdersDashboard({
+  view = "overview",
+  status = "all",
+  query,
+}: {
+  view?: DashboardView;
+  status?: DashboardStatus;
+  query?: string;
+} = {}) {
+  const matchingQuery = listOrders(query);
+  const filteredOrders = status === "all"
+    ? matchingQuery
+    : matchingQuery.filter((order) => order.status === status);
+  let revenue = 0;
+  for (const order of filteredOrders) revenue += order.total;
+  const metrics = {
+    orders: filteredOrders.length,
+    revenue,
+    paid: filteredOrders.filter((order) => order.status === "paid").length,
+    fulfilled: filteredOrders.filter((order) => order.status === "fulfilled").length,
+  };
+  const statusBreakdown = (["paid", "pending", "fulfilled"] as const).map((orderStatus) => ({
+    status: orderStatus,
+    count: matchingQuery.filter((order) => order.status === orderStatus).length,
+  }));
+  return {
+    headline: view === "orders" ? "Order explorer" : view === "status" ? "Fulfillment status" : "Orders dashboard",
+    summary: `${filteredOrders.length} demo orders · view=${view} · status=${status}`,
+    parameters: { view, status },
+    metrics,
+    statusBreakdown,
+    orders: filteredOrders,
+  };
 }
 
 export function discoverSkills() {

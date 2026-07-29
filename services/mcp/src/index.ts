@@ -1,5 +1,7 @@
 import { mcpHandler } from "./server.ts";
 import {
+  type DashboardStatus,
+  type DashboardView,
   MODERN_PROTOCOL_VERSION,
   discoverSkills,
   listOrders,
@@ -40,7 +42,12 @@ export const app = {
     if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false });
     if (url.pathname === "/api/mcp-app") {
       try {
-        return json(await loadMcpApp(new URL("/mcp", url)));
+        const view = url.searchParams.get("view");
+        const status = url.searchParams.get("status");
+        const parameters: { view?: DashboardView; status?: DashboardStatus } = {};
+        if (view === "overview" || view === "orders" || view === "status") parameters.view = view;
+        if (status === "all" || status === "paid" || status === "pending" || status === "fulfilled") parameters.status = status;
+        return json(await loadMcpApp(new URL("/mcp", url), parameters));
       } catch (error) {
         return json({ error: error instanceof Error ? error.message : "MCP App load failed" }, 500);
       }
