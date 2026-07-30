@@ -58,11 +58,21 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
   });
 });
 
-test("renders every navigation entry as an independent scene", async ({ page }) => {
+test("renders every navigation entry as an independent scene", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: "http://127.0.0.1:3000",
+  });
   await page.goto("/");
   await expect(page.getByText("总览", { exact: true })).toHaveCount(0);
   await expect(page.getByText("全链路验收", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("MCP 服务在线");
+  const copyMcpButton = page.getByRole("button", { name: "复制 MCP 地址" });
+  await expect(copyMcpButton).toBeVisible();
+  await expect(copyMcpButton).toHaveAttribute("title", "https://mcp-v2.kenvoai.com/mcp");
+  await copyMcpButton.click();
+  await expect(page.getByRole("button", { name: "MCP 地址已复制" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("https://mcp-v2.kenvoai.com/mcp");
   const githubEntry = page.getByRole("link", { name: "在 GitHub 查看 mcp-v2" });
   await expect(githubEntry).toBeVisible();
   await expect(githubEntry).toHaveAttribute("href", "https://github.com/ckken/mcp-v2");

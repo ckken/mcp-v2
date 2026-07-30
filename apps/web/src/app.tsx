@@ -3,6 +3,8 @@ import {
   ActivityIcon,
   BotIcon,
   BracesIcon,
+  CheckIcon,
+  CopyIcon,
   GitForkIcon,
   PanelsTopLeftIcon,
   ServerIcon,
@@ -57,6 +59,9 @@ import { SCENARIOS } from "./scenarios";
 type Health = "online" | "unavailable" | "checking";
 type Page = ScenarioId;
 type Run = VerificationRunView;
+type CopyStatus = "idle" | "copied" | "failed";
+
+const MCP_ENDPOINT = "https://mcp-v2.kenvoai.com/mcp";
 
 const pageIcons: Record<Page, LucideIcon> = {
   loop: WorkflowIcon,
@@ -81,6 +86,24 @@ const demoTools = [
   "tasks.create", "tasks.status", "tasks.list", "tasks.cancel", "tasks.result",
 ];
 const demoSkills = ["skills.discover", "skills.run"];
+
+async function copyText(value: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Clipboard copy failed");
+}
 
 function pageMeta(page: Page) {
   return pages.find((item) => item.id === page) ?? pages[0]!;
@@ -120,6 +143,8 @@ export function App() {
   const [page, setPage] = useState<Page>("loop");
   const [health, setHealth] = useState<Health>("checking");
   const [runs, setRuns] = useState<Run[]>([]);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = async () => {
     try {
@@ -137,6 +162,22 @@ export function App() {
   };
 
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => () => {
+    if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+  }, []);
+
+  const copyMcpEndpoint = async () => {
+    try {
+      await copyText(MCP_ENDPOINT);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+
+    if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+    copyFeedbackTimer.current = setTimeout(() => setCopyStatus("idle"), 2_000);
+  };
+
   const currentPage = pageMeta(page);
 
   return (
@@ -198,6 +239,25 @@ export function App() {
               <span>SCENE {currentPage.scene}</span>
               <strong>{currentPage.label}</strong>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              title={MCP_ENDPOINT}
+              aria-label={copyStatus === "copied"
+                ? "MCP 地址已复制"
+                : copyStatus === "failed"
+                  ? "复制 MCP 地址失败，点击重试"
+                  : "复制 MCP 地址"}
+              onClick={() => { void copyMcpEndpoint(); }}
+            >
+              {copyStatus === "copied"
+                ? <CheckIcon data-icon="inline-start" aria-hidden="true" />
+                : <CopyIcon data-icon="inline-start" aria-hidden="true" />}
+              <span className="hidden sm:inline" aria-live="polite">
+                {copyStatus === "copied" ? "已复制" : copyStatus === "failed" ? "重试复制" : "复制 MCP"}
+              </span>
+            </Button>
             <Button asChild variant="outline" size="sm">
               <a
                 href="https://github.com/ckken/mcp-v2"
