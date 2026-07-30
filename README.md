@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/mcp-v2-lab-cover.png" alt="MCP v2 Lab：协议、Apps、Skills 与 Codex 实验封面" width="100%" />
+  <img src="./assets/mcp-v2-lab-cover.png" alt="MCP V2 Fox Trail：Kenvo 狐狸巡检 Protocol、Apps、Skills 与 Codex" width="100%" />
 </p>
 
 # MCP v2 实验场
