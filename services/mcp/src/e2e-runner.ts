@@ -49,6 +49,12 @@ function createClient(name: string, mode: "modern" | "legacy") {
   );
 }
 
+function createTransport(mcpUrl: URL, authToken?: string) {
+  return new StreamableHTTPClientTransport(mcpUrl, {
+    ...(authToken === undefined ? {} : { authProvider: { token: async () => authToken } }),
+  });
+}
+
 async function runCase(
   id: string,
   group: E2eCaseGroup,
@@ -80,7 +86,7 @@ async function runCase(
   }
 }
 
-async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
+async function executeSuite(mcpUrl: URL, authToken?: string): Promise<E2eReport> {
   const startedAt = new Date().toISOString();
   const runId = `e2e_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
   const cases: E2eCaseResult[] = [];
@@ -122,7 +128,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
 
     await add("protocol.modern", "Protocol", "Modern Client 握手", async () => {
       modern = createClient("e2e-modern-client", "modern");
-      await modern.connect(new StreamableHTTPClientTransport(mcpUrl));
+      await modern.connect(createTransport(mcpUrl, authToken));
       assert(modern.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "Modern Client negotiated the wrong protocol version");
       assert(modern.getProtocolEra() === "modern", "Modern Client did not enter the modern era");
       const capabilities = modern.getDiscoverResult()?.capabilities;
@@ -133,7 +139,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
 
     await add("protocol.legacy", "Protocol", "旧 Codex stateless fallback", async () => {
       legacy = createClient("e2e-legacy-client", "legacy");
-      await legacy.connect(new StreamableHTTPClientTransport(mcpUrl));
+      await legacy.connect(createTransport(mcpUrl, authToken));
       assert(legacy.getNegotiatedProtocolVersion() === LEGACY_PROTOCOL_VERSION, "Legacy Client negotiated the wrong protocol version");
       assert(legacy.getProtocolEra() === "legacy", "Legacy Client did not enter the legacy era");
       const result = await legacy.callTool({
@@ -146,7 +152,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
       return { detail: "2025-06-18 Client 可调用参数化 Dashboard", evidence: ["era=legacy", `version=${LEGACY_PROTOCOL_VERSION}`, "orders=1"] };
     });
 
-    await add("discovery.tools", "Discovery", "发现全部 8 个 Tool", async () => {
+    await add("discovery.tools", "Discovery", "发现全部 13 个 Tool", async () => {
       assert(modern !== undefined, "Modern Client is unavailable");
       const { tools } = await modern.listTools();
       const expected = [
@@ -158,10 +164,25 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
         "verification.start",
         "verification.status",
         "verification.finish",
+        "tasks.create",
+        "tasks.status",
+        "tasks.list",
+        "tasks.cancel",
+        "tasks.result",
       ];
       for (const name of expected) assert(tools.some((tool) => tool.name === name), `Missing Tool: ${name}`);
       assert(tools.length === expected.length, `Expected ${expected.length} Tools, received ${tools.length}`);
-      for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.status"]) {
+      for (const name of [
+        "system.health",
+        "orders.search",
+        "orders.dashboard",
+        "skills.discover",
+        "skills.run",
+        "verification.status",
+        "tasks.status",
+        "tasks.list",
+        "tasks.result",
+      ]) {
         const annotations = tools.find((tool) => tool.name === name)?.annotations;
         assert(
           annotations?.readOnlyHint === true
@@ -171,7 +192,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
           `${name} must advertise safe read-only annotations`,
         );
       }
-      return { detail: "8/8 Tool 已发现", evidence: expected };
+      return { detail: "13/13 Tool 已发现", evidence: expected };
     });
 
     await add("discovery.resource", "Discovery", "发现 MCP App Resource", async () => {
@@ -181,6 +202,30 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
       assert(app !== undefined, "Orders MCP App Resource was not discovered");
       assert(app.mimeType === "text/html;profile=mcp-app", "Unexpected MCP App MIME type");
       return { detail: "ui:// Resource 与 MIME 正确", evidence: [app.uri, app.mimeType ?? "missing MIME"] };
+    });
+
+    await add("discovery.prompts", "Discovery", "发现两个原生 Prompt", async () => {
+      assert(modern !== undefined && legacy !== undefined, "MCP Clients are unavailable");
+      const modernPrompts = await modern.listPrompts();
+      const legacyPrompts = await legacy.listPrompts();
+      const expected = ["order-review", "verification-checklist"];
+      for (const name of expected) {
+        assert(modernPrompts.prompts.some((prompt) => prompt.name === name), `Modern Client missing Prompt: ${name}`);
+        assert(legacyPrompts.prompts.some((prompt) => prompt.name === name), `Legacy Client missing Prompt: ${name}`);
+      }
+      assert(modernPrompts.prompts.length === 2 && legacyPrompts.prompts.length === 2, "Prompt discovery count is inaccurate");
+      return { detail: "modern 与 legacy 均发现 2/2 Prompt", evidence: expected };
+    });
+
+    await add("discovery.prompt-render", "Discovery", "渲染参数化 Prompt", async () => {
+      assert(modern !== undefined && legacy !== undefined, "MCP Clients are unavailable");
+      const modernPrompt = await modern.getPrompt({ name: "order-review", arguments: { orderId: "ord_demo_1001" } });
+      const legacyPrompt = await legacy.getPrompt({ name: "verification-checklist", arguments: {} });
+      const modernText = modernPrompt.messages[0]?.content;
+      const legacyText = legacyPrompt.messages[0]?.content;
+      assert(modernText?.type === "text" && modernText.text.includes("ord_demo_1001") && modernText.text.includes("paid"), "Parameterized Prompt output is invalid");
+      assert(legacyText?.type === "text" && legacyText.text.includes("system.health"), "Legacy Prompt output is invalid");
+      return { detail: "参数插值与 legacy Prompt 获取均通过", evidence: ["ord_demo_1001", "status=paid", "legacy=getPrompt"] };
     });
 
     await add("tool.health", "Tools", "system.health", async () => {
@@ -232,6 +277,45 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
         return { detail: `view=${view} · status=${status} · orders=${expectedOrders}`, evidence: [`view=${view}`, `status=${status}`] };
       });
     }
+
+    await add("tasks.pending-cancel", "Tools", "应用级 Task 轮询与取消", async () => {
+      assert(modern !== undefined, "Modern Client is unavailable");
+      const createdResult = await modern.callTool({
+        name: "tasks.create",
+        arguments: { orderId: "ord_demo_1001", completeImmediately: false },
+      });
+      const created = structured<{ taskId?: string; status?: string }>(createdResult);
+      assert(created.taskId !== undefined && created.status === "pending", "Pending Task was not created");
+      const statusResult = await modern.callTool({ name: "tasks.status", arguments: { taskId: created.taskId } });
+      assert(structured<{ status?: string }>(statusResult).status === "pending", "Task polling did not preserve pending state");
+      const cancelledResult = await modern.callTool({ name: "tasks.cancel", arguments: { taskId: created.taskId } });
+      assert(structured<{ status?: string }>(cancelledResult).status === "cancelled", "Task cancellation failed");
+      return { detail: "create → status → cancel", evidence: [created.taskId, "pending", "cancelled"] };
+    });
+
+    await add("tasks.completed-result", "Tools", "应用级 Task 完成与结果", async () => {
+      assert(modern !== undefined, "Modern Client is unavailable");
+      const createdResult = await modern.callTool({
+        name: "tasks.create",
+        arguments: { orderId: "ord_demo_1002", completeImmediately: true },
+      });
+      const created = structured<{ taskId?: string; status?: string }>(createdResult);
+      assert(created.taskId !== undefined && created.status === "completed", "Completed Task was not created");
+      const result = await modern.callTool({ name: "tasks.result", arguments: { taskId: created.taskId } });
+      const value = structured<{ result?: { orders?: { id?: string }[] } }>(result);
+      assert(value.result?.orders?.length === 1 && value.result.orders[0]?.id === "ord_demo_1002", "Completed Task result is incorrect");
+      return { detail: "completed Task 返回指定订单", evidence: [created.taskId, "ord_demo_1002"] };
+    });
+
+    await add("tasks.list-errors", "Tools", "应用级 Task 列表与错误路径", async () => {
+      assert(modern !== undefined, "Modern Client is unavailable");
+      const listed = await modern.callTool({ name: "tasks.list", arguments: {} });
+      const value = structured<{ tasks?: { taskId?: string }[] }>(listed);
+      assert((value.tasks?.length ?? 0) >= 2, "Task list is incomplete");
+      const missing = await modern.callTool({ name: "tasks.status", arguments: { taskId: "task_missing" } });
+      assert(missing.isError === true, "Unknown Task must return an MCP Tool error");
+      return { detail: "Task 列表可发现，未知 ID 被拒绝", evidence: [`tasks=${value.tasks?.length ?? 0}`, "missing=isError"] };
+    });
 
     await add("skills.discover", "Skills", "发现两个应用层 Skill", async () => {
       assert(modern !== undefined, "Modern Client is unavailable");
@@ -358,9 +442,9 @@ export function getLatestE2eReport() {
   return latestReport;
 }
 
-export function runE2eSuite(mcpUrl: URL) {
+export function runE2eSuite(mcpUrl: URL, authToken?: string) {
   if (activeRun !== undefined) return activeRun;
-  activeRun = executeSuite(mcpUrl).finally(() => {
+  activeRun = executeSuite(mcpUrl, authToken).finally(() => {
     activeRun = undefined;
   });
   return activeRun;

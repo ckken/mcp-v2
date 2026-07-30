@@ -8,12 +8,19 @@ function createClient(name: string) {
   );
 }
 
+function createTransport(mcpUrl: URL, authToken?: string) {
+  return new StreamableHTTPClientTransport(mcpUrl, {
+    ...(authToken === undefined ? {} : { authProvider: { token: async () => authToken } }),
+  });
+}
+
 export async function loadMcpApp(
   mcpUrl: URL,
   parameters: { view?: "overview" | "orders" | "status"; status?: "all" | "paid" | "pending" | "fulfilled" } = {},
+  authToken?: string,
 ) {
   const client = createClient("mcp-app-visual-host");
-  await client.connect(new StreamableHTTPClientTransport(mcpUrl));
+  await client.connect(createTransport(mcpUrl, authToken));
   try {
     const [{ tools }, resource, toolResult] = await Promise.all([
       client.listTools(),
@@ -33,10 +40,10 @@ export async function loadMcpApp(
   }
 }
 
-export async function callMcpAppTool(mcpUrl: URL, name: string, args: Record<string, unknown>) {
+export async function callMcpAppTool(mcpUrl: URL, name: string, args: Record<string, unknown>, authToken?: string) {
   if (name !== "orders.dashboard") throw new Error(`MCP App cannot call ${name}`);
   const client = createClient("mcp-app-visual-host-tool-call");
-  await client.connect(new StreamableHTTPClientTransport(mcpUrl));
+  await client.connect(createTransport(mcpUrl, authToken));
   try {
     return await client.callTool({ name, arguments: args });
   } finally {

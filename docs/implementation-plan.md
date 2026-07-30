@@ -29,7 +29,11 @@ TypeScript 7。
   `postMessage` bridge；在官方 helper 兼容 v2 前不引入其 v1 peer。
 - Skills 是应用层能力模型，由 Resource、Prompt、Tool、Workflow 和
   `inputRequired` 组合，不宣称为 MCP 核心原生对象。
-- Tasks 只通过轮询演示，且由 feature flag 控制。
+- Prompts 使用 MCP 原生 `prompts/list` 与 `prompts/get`。
+- Tasks 通过 `tasks.*` 应用级 Tool 演示创建、轮询、列表、取消和结果；
+  不伪装成当前 SDK 已移除的旧版原生 Tasks。
+- Auth 使用可配置 Bearer Token 与 scope；本地默认关闭，设置
+  `MCP_AUTH_TOKEN` 后启用。
 
 ## Workspace
 

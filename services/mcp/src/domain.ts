@@ -4,11 +4,11 @@ export const LEGACY_PROTOCOL_VERSION = "2025-06-18";
 export const RUNTIME_CAPABILITIES = {
   tools: true,
   resources: true,
-  prompts: false,
+  prompts: true,
   skills: true,
   apps: true,
-  tasks: false,
-  auth: false,
+  tasks: true,
+  auth: true,
   verification: true,
 } as const;
 
@@ -41,9 +41,24 @@ const skills = [
 ] as const;
 
 const runs = new Map<string, RunEvidence>();
+const tasks = new Map<string, DemoTask>();
 
 export type DashboardView = "overview" | "orders" | "status";
 export type DashboardStatus = "all" | "paid" | "pending" | "fulfilled";
+export type DemoTaskStatus = "pending" | "completed" | "cancelled";
+
+export interface DemoTask {
+  readonly taskId: string;
+  readonly type: "order-export";
+  readonly status: DemoTaskStatus;
+  readonly orderId?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly result?: {
+    readonly format: "json";
+    readonly orders: ReturnType<typeof listOrders>;
+  };
+}
 
 function now(): string {
   return new Date().toISOString();
@@ -113,6 +128,57 @@ export function runSkill(skillId: string, orderId?: string) {
   };
 }
 
+export function createDemoTask({
+  orderId,
+  completeImmediately = false,
+}: {
+  orderId?: string;
+  completeImmediately?: boolean;
+} = {}): DemoTask {
+  const selectedOrders = orderId === undefined ? listOrders() : listOrders(orderId);
+  if (orderId !== undefined && !selectedOrders.some((order) => order.id === orderId)) {
+    throw new Error("Unknown demo order");
+  }
+  const timestamp = now();
+  const task: DemoTask = {
+    taskId: `task_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`,
+    type: "order-export",
+    status: completeImmediately ? "completed" : "pending",
+    ...(orderId === undefined ? {} : { orderId }),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...(completeImmediately ? { result: { format: "json", orders: selectedOrders } } : {}),
+  };
+  tasks.set(task.taskId, task);
+  return task;
+}
+
+export function statusDemoTask(taskId: string): DemoTask {
+  const task = tasks.get(taskId);
+  if (task === undefined) throw new Error("Unknown demo task");
+  return task;
+}
+
+export function listDemoTasks(): readonly DemoTask[] {
+  return [...tasks.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export function cancelDemoTask(taskId: string): DemoTask {
+  const task = statusDemoTask(taskId);
+  if (task.status !== "pending") throw new Error(`Cannot cancel ${task.status} demo task`);
+  const cancelled: DemoTask = { ...task, status: "cancelled", updatedAt: now() };
+  tasks.set(taskId, cancelled);
+  return cancelled;
+}
+
+export function resultDemoTask(taskId: string) {
+  const task = statusDemoTask(taskId);
+  if (task.status !== "completed" || task.result === undefined) {
+    throw new Error(`Demo task result is unavailable while status=${task.status}`);
+  }
+  return { taskId, status: task.status, result: task.result };
+}
+
 export function startVerification(): RunEvidence {
   const run: RunEvidence = {
     runId: makeRunId(),
@@ -159,4 +225,5 @@ export function finishVerification(runId: string, confirmed: boolean): RunEviden
 
 export function resetDemoStateForTest() {
   runs.clear();
+  tasks.clear();
 }

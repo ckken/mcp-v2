@@ -1,12 +1,14 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
-export async function runVerification(mcpUrl: URL, clientName: string) {
+export async function runVerification(mcpUrl: URL, clientName: string, authToken?: string) {
   const client = new Client(
     { name: clientName, version: "0.1.0" },
     { versionNegotiation: { mode: { pin: "2026-07-28" } } },
   );
 
-  await client.connect(new StreamableHTTPClientTransport(mcpUrl));
+  await client.connect(new StreamableHTTPClientTransport(mcpUrl, {
+    ...(authToken === undefined ? {} : { authProvider: { token: async () => authToken } }),
+  }));
   try {
     const started = await client.callTool({ name: "verification.start", arguments: {} });
     const { runId } = started.structuredContent as { runId: string };

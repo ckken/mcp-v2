@@ -20,11 +20,11 @@ describe("shared runtime contracts", () => {
     expect(health.capabilities).toEqual({
       tools: true,
       resources: true,
-      prompts: false,
+      prompts: true,
       skills: true,
       apps: true,
-      tasks: false,
-      auth: false,
+      tasks: true,
+      auth: true,
       verification: true,
     });
   });

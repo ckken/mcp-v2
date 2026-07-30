@@ -6,8 +6,8 @@ import type { VerificationRun } from "./verification.ts";
 export const fixtureTimestamp = "2026-07-29T00:00:00.000Z";
 
 export const capabilityFixture: CapabilityMatrix = {
-  tools: true, resources: true, prompts: false, skills: true,
-  apps: true, tasks: false, auth: false, verification: true,
+  tools: true, resources: true, prompts: true, skills: true,
+  apps: true, tasks: true, auth: true, verification: true,
 };
 
 export const serviceHealthFixture: ServiceHealth = {

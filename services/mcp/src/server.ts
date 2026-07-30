@@ -2,13 +2,18 @@ import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   MODERN_PROTOCOL_VERSION,
+  cancelDemoTask,
+  createDemoTask,
   discoverSkills,
   finishVerification,
   getOrdersDashboard,
+  listDemoTasks,
   listOrders,
   recordEvidence,
+  resultDemoTask,
   runSkill,
   startVerification,
+  statusDemoTask,
   statusVerification
 } from "./domain.ts";
 import { getOrdersAppHtml, MCP_APP_MIME_TYPE, ORDERS_APP_URI } from "./mcp-app.ts";
@@ -63,6 +68,7 @@ export function createDemoMcpServer() {
       capabilities: {
         tools: { listChanged: false },
         resources: { listChanged: false },
+        prompts: { listChanged: false },
       },
     },
   );
@@ -84,6 +90,45 @@ export function createDemoMcpServer() {
             prefersBorder: true,
             csp: { connectDomains: [], resourceDomains: [] },
           },
+        },
+      }],
+    }),
+  );
+  server.registerPrompt(
+    "order-review",
+    {
+      title: "Review a demo order",
+      description: "Build a bounded review prompt for one demo order",
+      argsSchema: z.object({ orderId: z.string().min(1) }),
+    },
+    ({ orderId }) => {
+      const order = listOrders(orderId).find((candidate) => candidate.id === orderId);
+      if (order === undefined) throw new Error("Unknown demo order");
+      return {
+        description: `Review ${order.id} without exposing non-demo data`,
+        messages: [{
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `Review demo order ${order.id}: status=${order.status}, total=${order.currency} ${order.total}. Return a concise operational summary.`,
+          },
+        }],
+      };
+    },
+  );
+  server.registerPrompt(
+    "verification-checklist",
+    {
+      title: "Verification checklist",
+      description: "Build the bounded checklist used before human confirmation",
+      argsSchema: z.object({}),
+    },
+    () => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: "Verify system.health, skills.discover, orders.search and skills.run, then request human confirmation.",
         },
       }],
     }),
@@ -154,6 +199,57 @@ export function createDemoMcpServer() {
       annotations: READ_ONLY_ANNOTATIONS,
     },
     tool("skills.run", ({ skillId, orderId }) => runSkill(skillId, orderId)),
+  );
+  server.registerTool(
+    "tasks.create",
+    {
+      description: "Create an application-level order export task",
+      inputSchema: z.object({
+        orderId: z.string().optional(),
+        completeImmediately: z.boolean().default(false),
+      }),
+      annotations: STATEFUL_ANNOTATIONS,
+    },
+    tool("tasks.create", ({ orderId, completeImmediately }) => createDemoTask({
+      ...(orderId === undefined ? {} : { orderId }),
+      completeImmediately,
+    })),
+  );
+  server.registerTool(
+    "tasks.status",
+    {
+      description: "Read an application-level task",
+      inputSchema: z.object({ taskId: z.string() }),
+      annotations: READ_ONLY_ANNOTATIONS,
+    },
+    tool("tasks.status", ({ taskId }) => statusDemoTask(taskId)),
+  );
+  server.registerTool(
+    "tasks.list",
+    {
+      description: "List application-level tasks",
+      inputSchema: z.object({}),
+      annotations: READ_ONLY_ANNOTATIONS,
+    },
+    tool("tasks.list", () => ({ tasks: listDemoTasks() })),
+  );
+  server.registerTool(
+    "tasks.cancel",
+    {
+      description: "Cancel a pending application-level task",
+      inputSchema: z.object({ taskId: z.string() }),
+      annotations: STATEFUL_ANNOTATIONS,
+    },
+    tool("tasks.cancel", ({ taskId }) => cancelDemoTask(taskId)),
+  );
+  server.registerTool(
+    "tasks.result",
+    {
+      description: "Read a completed application-level task result",
+      inputSchema: z.object({ taskId: z.string() }),
+      annotations: READ_ONLY_ANNOTATIONS,
+    },
+    tool("tasks.result", ({ taskId }) => resultDemoTask(taskId)),
   );
   server.registerTool("verification.start", {
     description: "Start a desensitized verification run",

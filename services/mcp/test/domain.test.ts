@@ -1,12 +1,17 @@
 import { expect, test } from "bun:test";
 import {
+  cancelDemoTask,
+  createDemoTask,
   finishVerification,
   getOrdersDashboard,
+  listDemoTasks,
   listOrders,
   recordEvidence,
   resetDemoStateForTest,
+  resultDemoTask,
   runSkill,
-  startVerification
+  startVerification,
+  statusDemoTask,
 } from "../src/domain.ts";
 
 test("demo orders can be searched without exposing non-demo data", () => {
@@ -42,4 +47,19 @@ test("verification only passes after the expected tool chain and confirmation", 
 
 test("unknown demo skill is rejected", () => {
   expect(() => runSkill("not-a-skill")).toThrow("Unknown demo skill");
+});
+
+test("application tasks support polling, results and cancellation", () => {
+  resetDemoStateForTest();
+  const pending = createDemoTask({ orderId: "ord_demo_1001" });
+  expect(statusDemoTask(pending.taskId).status).toBe("pending");
+  expect(cancelDemoTask(pending.taskId).status).toBe("cancelled");
+  expect(() => resultDemoTask(pending.taskId)).toThrow("status=cancelled");
+
+  const completed = createDemoTask({ orderId: "ord_demo_1002", completeImmediately: true });
+  expect(resultDemoTask(completed.taskId)).toMatchObject({
+    status: "completed",
+    result: { format: "json", orders: [{ id: "ord_demo_1002" }] },
+  });
+  expect(listDemoTasks()).toHaveLength(2);
 });

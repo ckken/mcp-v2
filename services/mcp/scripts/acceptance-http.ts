@@ -1,5 +1,5 @@
 import { Client, type FetchLike, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { app } from "../src/index.ts";
+import { app, createApp } from "../src/index.ts";
 import { LEGACY_PROTOCOL_VERSION, MODERN_PROTOCOL_VERSION, RUNTIME_CAPABILITIES } from "../src/domain.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -9,6 +9,19 @@ function assert(condition: unknown, message: string): asserts condition {
 async function main() {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch });
   const baseUrl = `http://127.0.0.1:${server.port}`;
+  const validToken = crypto.randomUUID();
+  const limitedToken = crypto.randomUUID();
+  const securedApp = createApp({
+    auth: {
+      tokens: [
+        { token: validToken, clientId: "acceptance-valid", scopes: ["mcp:access"] },
+        { token: limitedToken, clientId: "acceptance-limited", scopes: ["profile:read"] },
+      ],
+      requiredScopes: ["mcp:access"],
+    },
+  });
+  const securedServer = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: securedApp.fetch });
+  const securedBaseUrl = `http://127.0.0.1:${securedServer.port}`;
   const mcpResponses: { era: "legacy" | "modern" | "auto"; method: string; status: number; contentType: string }[] = [];
   const transport = (era: "legacy" | "modern" | "auto") => {
     const recordingFetch: FetchLike = async (input, init) => {
@@ -37,6 +50,9 @@ async function main() {
       responseFraming: { modern: string; legacy: string };
       standaloneSseEndpoint: boolean;
       subscriptions: boolean;
+      authConfigured: boolean;
+      authMode: string;
+      taskModel: string;
       capabilities: typeof RUNTIME_CAPABILITIES;
     };
     assert(status.protocolVersion === MODERN_PROTOCOL_VERSION && status.legacy === "stateless", "status must advertise modern mode with stateless compatibility");
@@ -44,6 +60,8 @@ async function main() {
     assert(status.legacyProtocolVersion === LEGACY_PROTOCOL_VERSION, "status must identify the tested legacy protocol version");
     assert(status.responseFraming.modern === "application/json" && status.responseFraming.legacy === "text/event-stream", "status must report era-specific response framing");
     assert(status.standaloneSseEndpoint === false && status.subscriptions === false, "status must not advertise unimplemented streaming capabilities");
+    assert(status.authConfigured === false && status.authMode === "disabled", "default local runtime must keep Auth optional");
+    assert(status.taskModel === "application-tools", "status must identify the application-level Task model");
     assert(JSON.stringify(status.capabilities) === JSON.stringify(RUNTIME_CAPABILITIES), "status must report the implemented capability matrix");
 
     const legacyClient = new Client(
@@ -77,10 +95,35 @@ async function main() {
     assert(discoverCapabilities?.tools?.listChanged === false, "modern discovery must not advertise Tool subscriptions");
     assert(discoverCapabilities.resources?.listChanged === false, "modern discovery must not advertise Resource subscriptions");
     const tools = await client.listTools();
-    for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"]) {
+    for (const name of [
+      "system.health",
+      "orders.search",
+      "orders.dashboard",
+      "skills.discover",
+      "skills.run",
+      "verification.start",
+      "verification.status",
+      "verification.finish",
+      "tasks.create",
+      "tasks.status",
+      "tasks.list",
+      "tasks.cancel",
+      "tasks.result",
+    ]) {
       assert(tools.tools.some((tool) => tool.name === name), `missing ${name}`);
     }
-    for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.status"]) {
+    assert(tools.tools.length === 13, "modern client must discover exactly 13 tools");
+    for (const name of [
+      "system.health",
+      "orders.search",
+      "orders.dashboard",
+      "skills.discover",
+      "skills.run",
+      "verification.status",
+      "tasks.status",
+      "tasks.list",
+      "tasks.result",
+    ]) {
       const annotations = tools.tools.find((tool) => tool.name === name)?.annotations;
       assert(
         annotations?.readOnlyHint === true
@@ -116,6 +159,23 @@ async function main() {
       (filteredDashboard.structuredContent as { orders?: unknown[] }).orders?.length === 1,
       "orders.dashboard must apply the status parameter",
     );
+    const prompts = await client.listPrompts();
+    assert(prompts.prompts.length === 2, "modern client must discover exactly two Prompts");
+    assert(prompts.prompts.some((prompt) => prompt.name === "order-review"), "order-review Prompt must be discoverable");
+    const prompt = await client.getPrompt({ name: "order-review", arguments: { orderId: "ord_demo_1001" } });
+    const promptContent = prompt.messages[0]?.content;
+    assert(promptContent?.type === "text" && promptContent.text.includes("ord_demo_1001"), "order-review Prompt must interpolate orderId");
+    const taskCreated = await client.callTool({
+      name: "tasks.create",
+      arguments: { orderId: "ord_demo_1002", completeImmediately: true },
+    });
+    const taskId = (taskCreated.structuredContent as { taskId?: string }).taskId;
+    assert(typeof taskId === "string", "tasks.create must return taskId");
+    const taskResult = await client.callTool({ name: "tasks.result", arguments: { taskId } });
+    assert(
+      (taskResult.structuredContent as { result?: { orders?: { id?: string }[] } }).result?.orders?.[0]?.id === "ord_demo_1002",
+      "tasks.result must return the selected order",
+    );
     const start = await client.callTool({ name: "verification.start", arguments: {} });
     const run = start.structuredContent as { runId: string };
     assert(typeof run.runId === "string", "verification.start must return runId");
@@ -139,7 +199,7 @@ async function main() {
     await autoClient.connect(transport("auto"));
     assert(autoClient.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "auto client must prefer the modern protocol");
     assert(autoClient.getProtocolEra() === "modern", "auto client must select the modern era");
-    assert((await autoClient.listTools()).tools.length === 8, "auto client must discover all tools");
+    assert((await autoClient.listTools()).tools.length === 13, "auto client must discover all tools");
     await autoClient.close();
 
     const e2eResponse = await fetch(`${baseUrl}/api/e2e/run`, {
@@ -154,8 +214,21 @@ async function main() {
       failed?: number;
       cases?: { id?: string; status?: string }[];
     };
-    assert(e2e.status === "passed" && e2e.total === 20 && e2e.passed === 20 && e2e.failed === 0, "all 20 E2E cases must pass");
-    for (const id of ["protocol.modern", "protocol.legacy", "skills.order-summary", "skills.unknown", "verification.success", "verification.rejected", "mcp-app.resource"]) {
+    assert(e2e.status === "passed" && e2e.total === 25 && e2e.passed === 25 && e2e.failed === 0, "all 25 E2E cases must pass");
+    for (const id of [
+      "protocol.modern",
+      "protocol.legacy",
+      "discovery.prompts",
+      "discovery.prompt-render",
+      "tasks.pending-cancel",
+      "tasks.completed-result",
+      "tasks.list-errors",
+      "skills.order-summary",
+      "skills.unknown",
+      "verification.success",
+      "verification.rejected",
+      "mcp-app.resource",
+    ]) {
       assert(e2e.cases?.some((item) => item.id === id && item.status === "passed"), `missing passed E2E case ${id}`);
     }
     assert(mcpResponses.length > 0, "MCP response content types were not observed");
@@ -175,9 +248,43 @@ async function main() {
       mcpResponses.some(({ era, status, contentType }) => era === "legacy" && status === 200 && contentType.includes("text/event-stream")),
       "legacy stateless compatibility must exercise its SSE response framing",
     );
+
+    const unauthorized = await fetch(`${securedBaseUrl}/mcp`, { method: "POST", body: "{}" });
+    assert(unauthorized.status === 401 && unauthorized.headers.get("www-authenticate")?.includes("Bearer"), "missing bearer token must return a Bearer challenge");
+    const invalid = await fetch(`${securedBaseUrl}/mcp`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${crypto.randomUUID()}` },
+      body: "{}",
+    });
+    assert(invalid.status === 401, "invalid bearer token must return HTTP 401");
+    const insufficient = await fetch(`${securedBaseUrl}/mcp`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${limitedToken}` },
+      body: "{}",
+    });
+    assert(insufficient.status === 403, "insufficient bearer scope must return HTTP 403");
+    const securedStatus = await fetch(`${securedBaseUrl}/api/status`).then((response) => response.json()) as {
+      authConfigured?: boolean;
+      authMode?: string;
+    };
+    assert(securedStatus.authConfigured === true && securedStatus.authMode === "bearer", "secured runtime status must expose Bearer Auth");
+    const securedClient = new Client(
+      { name: "mcp-v2-auth-acceptance", version: "0.1.0" },
+      {
+        supportedProtocolVersions: [MODERN_PROTOCOL_VERSION],
+        versionNegotiation: { mode: { pin: MODERN_PROTOCOL_VERSION } },
+      },
+    );
+    await securedClient.connect(new StreamableHTTPClientTransport(new URL(`${securedBaseUrl}/mcp`), {
+      authProvider: { token: async () => validToken },
+    }));
+    const securedHealth = await securedClient.callTool({ name: "system.health", arguments: {} });
+    assert((securedHealth.structuredContent as { ok?: boolean }).ok === true, "valid bearer token must authorize MCP calls");
+    await securedClient.close();
     console.log("acceptance:http PASS");
   } finally {
     server.stop(true);
+    securedServer.stop(true);
   }
 }
 

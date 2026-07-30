@@ -18,26 +18,29 @@
 | MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过；Desktop 内嵌 UI 未验收通过 |
 | 参数化 Dashboard | `view`、`status`、`query` 驱动 shadcn/ui 界面 | 桌面浏览器与 390px 已通过 |
 | Codex 会话验收 | CLI 与当前 Desktop task 直接调用 Tool | 已通过 |
-| Case Pulse E2E | React Flow 场景地图逐条呈现 modern + legacy 的 20 个用例 | 20/20 |
-| Prompts / Tasks / Auth | 尚未注册协议能力或业务实现 | 未实现 |
+| Prompts | 2 个原生 MCP Prompt，modern 与 legacy 均可发现和渲染 | 通过 |
+| Tasks | 5 个应用级 Task Tool，覆盖创建、轮询、列表、取消和结果 | 通过 |
+| Auth | 可配置 Bearer Token + scope，覆盖 401/403/授权调用 | 通过 |
+| Case Pulse E2E | React Flow 场景地图逐条呈现 modern + legacy 的 25 个用例 | 25/25 |
 
 这里的 legacy SSE 仅指 `2025-06-18` stateless POST 响应的
 `text/event-stream` 封装；项目没有旧式独立 SSE endpoint，也没有实现
 `subscriptions/listen`。`responseMode: "json"` 只约束 `2026-07-28`
 modern 请求，不能据此宣称所有兼容请求都是 JSON 响应。
 
-当前运行时能力矩阵为 `tools/resources/skills/apps/verification=true`，
-`prompts/tasks/auth=false`。这里的 Skills 是 Tool 组合出的应用层能力，
-不是 MCP 核心原生对象。
+当前项目定义的八类运行时能力均已实现。Skills 是 Tool 组合出的应用层能力；
+Tasks 也采用 `tasks.*` Tool 模型，因为当前 `2026-07-28` SDK 已不提供旧版
+原生 Tasks 运行时。Auth 在设置 `MCP_AUTH_TOKEN` 后启用；未设置时保留本地
+免鉴权开发模式。
 
 ## Case Pulse 可视化验收
 
 <p align="center">
-  <img src="./artifacts/e2e-case-pulse.png" alt="MCP E2E Case Pulse：二十个用例逐条动效呈现" width="100%" />
+  <img src="./artifacts/e2e-case-pulse.png" alt="MCP E2E Case Pulse：二十五个用例逐条动效呈现" width="100%" />
 </p>
 
 `E2E Lab` 使用 React Flow 把 Protocol、Discovery、Tools、Skills、
-Verification 和 MCP Apps 组织成六个场景。真实报告返回后，20 个用例会
+Verification 和 MCP Apps 组织成六个场景。真实报告返回后，25 个用例会
 逐条经过 queued、running 和 passed/failed 状态；点击任一场景可以查看该组
 用例的耗时和脱敏证据。
 
