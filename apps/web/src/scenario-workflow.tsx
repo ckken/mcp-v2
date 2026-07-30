@@ -38,6 +38,8 @@ type WorkflowNodeData = {
   label: string;
   copy: string;
   state: WorkflowState;
+  featured: boolean;
+  compact: boolean;
   durationMs?: number;
 };
 
@@ -47,8 +49,11 @@ const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeou
 
 function WorkflowNodeCard({ data }: NodeProps<WorkflowNode>) {
   return (
-    <article className={`scenario-node scenario-node-${data.state}`}>
-      <Handle type="target" position={Position.Left} />
+    <article
+      className={`scenario-node scenario-node-${data.state}${data.featured ? " scenario-node-featured" : ""}`}
+      aria-label={`${data.label}：${data.state}`}
+    >
+      <Handle type="target" position={data.compact ? Position.Top : Position.Left} />
       <span className="scenario-node-index">{data.index}</span>
       <span className="scenario-node-copy">
         <strong>{data.label}</strong>
@@ -62,7 +67,7 @@ function WorkflowNodeCard({ data }: NodeProps<WorkflowNode>) {
         {(data.state === "idle" || data.state === "queued") && <CircleIcon />}
       </span>
       {data.durationMs !== undefined && <time>{data.durationMs}ms</time>}
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={data.compact ? Position.Bottom : Position.Right} />
     </article>
   );
 }
@@ -75,12 +80,43 @@ function matchesDefinition(report: ScenarioReportView, definition: ScenarioDefin
     && report.steps.every((step, index) => step.id === report.route[index]);
 }
 
-function nodePosition(index: number, count: number) {
+function nodePosition(index: number, count: number, compact: boolean) {
+  if (compact) {
+    return {
+      x: index % 2 === 0 ? 46 : 74,
+      y: 104 + index * 96,
+    };
+  }
+
   const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
   return {
     x: 420 + Math.cos(angle) * 290,
     y: 205 + Math.sin(angle) * 170,
   };
+}
+
+function useCompactWorkflow() {
+  const [compact, setCompact] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return compact;
+}
+
+function stateLabel(state: WorkflowState) {
+  if (state === "passed") return "已通过";
+  if (state === "failed") return "失败";
+  if (state === "skipped") return "已跳过";
+  if (state === "running") return "运行中";
+  return "待运行";
 }
 
 function initializeEntryRequest(entry: ScenarioEntryDefinition): ScenarioEntryRequest {
@@ -146,6 +182,12 @@ export function ScenarioWorkflow({
     protocolMode: "auto",
     parameters: {},
   });
+  const [selectedFeatureId, setSelectedFeatureId] = useState(definition.features[0]?.id ?? "");
+  const [selectedStepId, setSelectedStepId] = useState(
+    definition.features[0]?.stepId ?? definition.steps[0]?.id ?? "",
+  );
+  const [entryDirty, setEntryDirty] = useState(false);
+  const compact = useCompactWorkflow();
 
   const loadLatest = async () => {
     const response = await fetch(`/api/scenarios/${definition.id}/latest`, {
@@ -172,6 +214,9 @@ export function ScenarioWorkflow({
     setEntry(null);
     setReport(null);
     setError(null);
+    setEntryDirty(false);
+    setSelectedFeatureId(definition.features[0]?.id ?? "");
+    setSelectedStepId(definition.features[0]?.stepId ?? definition.steps[0]?.id ?? "");
     void Promise.all([loadLatest(), loadEntry()])
       .then(([nextReport, nextEntry]) => {
         if (current) {
@@ -188,6 +233,7 @@ export function ScenarioWorkflow({
 
   const run = async () => {
     setRunning(true);
+    setEntryDirty(false);
     setClosing(false);
     setReport(null);
     setPlaybackReport(null);
@@ -239,6 +285,7 @@ export function ScenarioWorkflow({
       setReport(next);
       setEntry(nextEntry);
       setEntryRequest(initializeEntryRequest(nextEntry));
+      setEntryDirty(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "场景刷新失败");
     } finally {
@@ -247,6 +294,7 @@ export function ScenarioWorkflow({
   };
 
   const updateEntryField = (field: ScenarioEntryField, value: ScenarioEntryValue) => {
+    setEntryDirty(true);
     setEntryRequest((current) => {
       if (field.binding === "protocolMode") {
         return { ...current, protocolMode: String(value) as ScenarioEntryRequest["protocolMode"] };
@@ -272,14 +320,14 @@ export function ScenarioWorkflow({
         id: step.id,
         label: step.title,
         copy: step.detail,
-        position: nodePosition(index, visibleReport.steps.length),
+        position: nodePosition(index, visibleReport.steps.length, compact),
       }));
     }
     return definition.steps.map((step, index) => ({
       ...step,
-      position: nodePosition(index, definition.steps.length),
+      position: nodePosition(index, definition.steps.length, compact),
     }));
-  }, [definition.steps, visibleReport]);
+  }, [compact, definition.steps, visibleReport]);
 
   const nodes = useMemo<WorkflowNode[]>(() => {
     const readyState: WorkflowState = report?.status
@@ -288,7 +336,7 @@ export function ScenarioWorkflow({
       {
         id: "ready",
         type: "workflow",
-        position: { x: 20, y: 182 },
+        position: compact ? { x: 60, y: 8 } : { x: 20, y: 182 },
         data: {
           index: "00",
           label: closing ? "闭环回流" : "动态入口",
@@ -296,6 +344,8 @@ export function ScenarioWorkflow({
             ? "正在发现 v2 能力"
             : `${entry.discovery.tools.length} Tools · ${entryRequest.protocolMode}`,
           state: readyState,
+          featured: false,
+          compact,
         },
       },
       ...renderedSteps.map((step, index) => {
@@ -309,12 +359,25 @@ export function ScenarioWorkflow({
             label: step.label,
             copy: result?.detail ?? step.copy,
             state: stepState({ index, report, playbackReport, activeStepIndex, running }),
+            featured: selectedStepId === step.id,
+            compact,
             ...(result === undefined ? {} : { durationMs: result.durationMs }),
           },
         };
       }),
     ];
-  }, [activeStepIndex, closing, entry, entryRequest.protocolMode, playbackReport, renderedSteps, report, running]);
+  }, [
+    activeStepIndex,
+    closing,
+    compact,
+    entry,
+    entryRequest.protocolMode,
+    playbackReport,
+    renderedSteps,
+    report,
+    running,
+    selectedStepId,
+  ]);
 
   const edges = useMemo<Edge[]>(() => {
     const sequence = ["ready", ...renderedSteps.map((step) => step.id), "ready"];
@@ -351,7 +414,29 @@ export function ScenarioWorkflow({
     });
   }, [activeStepIndex, closing, definition.id, playbackReport, renderedSteps, report, running]);
 
+  useEffect(() => {
+    if (activeStepIndex < 0) return;
+    const stepId = visibleReport?.steps[activeStepIndex]?.id;
+    if (stepId === undefined) return;
+    setSelectedStepId(stepId);
+    const matchingFeature = definition.features.find((feature) => feature.stepId === stepId);
+    if (matchingFeature !== undefined) setSelectedFeatureId(matchingFeature.id);
+  }, [activeStepIndex, definition.features, visibleReport]);
+
   const activeStep = activeStepIndex >= 0 ? visibleReport?.steps[activeStepIndex] : undefined;
+  const selectedFeature = definition.features.find((feature) => feature.id === selectedFeatureId)
+    ?? definition.features[0];
+  const selectedDefinitionStep = definition.steps.find((step) => step.id === selectedStepId);
+  const selectedRenderedStep = renderedSteps.find((step) => step.id === selectedStepId);
+  const selectedResult = visibleReport?.steps.find((step) => step.id === selectedStepId);
+  const selectedState = nodes.find((node) => node.id === selectedStepId)?.data.state
+    ?? (visibleReport !== null && selectedDefinitionStep !== undefined ? "skipped" : "queued");
+  const selectedEvidence = selectedResult?.evidence ?? [];
+
+  const selectFeature = (featureId: string, stepId: string) => {
+    setSelectedFeatureId(featureId);
+    setSelectedStepId(stepId);
+  };
 
   return (
     <section className="scenario-workflow" data-testid={`scenario-workflow-${definition.id}`}>
@@ -383,6 +468,48 @@ export function ScenarioWorkflow({
           </Button>
         </div>
       </header>
+
+      {selectedFeature !== undefined && (
+        <section className="scenario-features" aria-label={`${definition.label} v2 新特征`}>
+          <div className="scenario-features-heading">
+            <div>
+              <p>WHAT CHANGED IN V2</p>
+              <h3>v2 新特征</h3>
+              <span>选择特征，定位到实际路线节点；结论只取自服务端证据。</span>
+            </div>
+            <Badge variant="outline">{definition.features.length} 个现场特征</Badge>
+          </div>
+          <div className="scenario-feature-selector" aria-label="选择要查看的新特征">
+            {definition.features.map((feature, index) => (
+              <button
+                key={feature.id}
+                type="button"
+                aria-pressed={feature.id === selectedFeature.id}
+                onClick={() => selectFeature(feature.id, feature.stepId)}
+              >
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{feature.label}</strong>
+                <small>{feature.tag}</small>
+              </button>
+            ))}
+          </div>
+          <article className="scenario-feature-story" aria-live="polite">
+            <div className="scenario-feature-before">
+              <span>过去的问题</span>
+              <p>{selectedFeature.before}</p>
+            </div>
+            <div className="scenario-feature-now">
+              <span>v2 当前行为</span>
+              <p>{selectedFeature.now}</p>
+            </div>
+            <div className="scenario-feature-proof">
+              <span>服务端证明</span>
+              <p>{selectedFeature.proof}</p>
+              <code>{selectedFeature.stepId}</code>
+            </div>
+          </article>
+        </section>
+      )}
 
       <section className="scenario-entry" aria-label={`${definition.label}动态入口`}>
         <div className="scenario-entry-heading">
@@ -463,6 +590,62 @@ export function ScenarioWorkflow({
         )}
       </section>
 
+      <section className="scenario-route-explorer" aria-label={`${definition.label}实际路线`}>
+        <div className="scenario-route-heading">
+          <div>
+            <p>ACTUAL SERVER ROUTE</p>
+            <h3>实际路线与证据</h3>
+          </div>
+          <span>
+            {entryDirty
+              ? "入口已改变 · 等待重新运行"
+              : visibleReport !== null
+                ? `runId · ${visibleReport.runId}`
+                : `${entryRequest.protocolMode} · ${entryRequest.selection ?? "default"}`}
+          </span>
+        </div>
+        <div className="scenario-route-rail" aria-label="选择路线证据节点">
+          {renderedSteps.map((step, index) => {
+            const state = nodes.find((node) => node.id === step.id)?.data.state ?? "queued";
+            return (
+              <button
+                key={step.id}
+                type="button"
+                className={selectedStepId === step.id ? "selected" : undefined}
+                aria-current={selectedStepId === step.id ? "step" : undefined}
+                onClick={() => setSelectedStepId(step.id)}
+              >
+                <span className={`status-dot ${state}`} />
+                <small>{String(index + 1).padStart(2, "0")}</small>
+                <strong>{step.label}</strong>
+              </button>
+            );
+          })}
+        </div>
+        <article className={`scenario-step-inspector ${selectedState}`}>
+          <div className="scenario-step-state">
+            <span className={`status-dot ${selectedState}`} />
+            <small>{stateLabel(selectedState)}</small>
+          </div>
+          <div className="scenario-step-copy">
+            <span>SELECTED EVIDENCE NODE</span>
+            <h4>{selectedRenderedStep?.label ?? selectedDefinitionStep?.label ?? "选择路线节点"}</h4>
+            <p>
+              {selectedResult?.detail
+                ?? (visibleReport !== null && selectedDefinitionStep !== undefined
+                  ? "当前服务端路线没有经过此节点；入口选择已真实改变运行路径。"
+                  : selectedDefinitionStep?.copy ?? "运行场景后查看服务端步骤证据。")}
+            </p>
+          </div>
+          <div className="scenario-step-evidence">
+            {selectedEvidence.length > 0
+              ? selectedEvidence.map((evidence) => <code key={evidence}>{evidence}</code>)
+              : <span>运行后显示 detail、evidence、duration 与 runId</span>}
+          </div>
+          <time>{selectedResult === undefined ? "—" : `${selectedResult.durationMs}ms`}</time>
+        </article>
+      </section>
+
       <div className="scenario-canvas" data-testid={`scenario-canvas-${definition.id}`}>
         <ReactFlow<WorkflowNode, Edge>
           nodes={nodes}
@@ -470,7 +653,10 @@ export function ScenarioWorkflow({
           nodeTypes={nodeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
+          elementsSelectable
+          onNodeClick={(_, node) => {
+            if (node.id !== "ready") setSelectedStepId(node.id);
+          }}
           minZoom={0.45}
           maxZoom={1.25}
           fitView

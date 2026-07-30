@@ -80,6 +80,14 @@ test("renders every navigation entry as an independent scene", async ({ page, co
   await expect(page.locator(".scene-stage-header")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "刷新数据" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "运行会话验证" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 3, name: "v2 新特征" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "实际路线与证据" })).toBeVisible();
+  const cacheFeature = page.getByRole("button", { name: /发现缓存语义/ });
+  await cacheFeature.click();
+  await expect(cacheFeature).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("发现与 tools/list 分别返回 ttlMs 和 cacheScope。")).toBeVisible();
+  await expect(page.getByTestId("scenario-workflow-loop").locator(".scenario-node-featured"))
+    .toContainText("闭环结论");
 
   for (const [navigation, title, scene, id] of [
     ["00 · 闭环实验", "闭环实验", "SCENE 00", "loop"],
@@ -94,8 +102,13 @@ test("renders every navigation entry as an independent scene", async ({ page, co
     await expect(page.locator(".scene-stage")).toHaveAttribute("data-scene", scene.slice(-2));
     await expect(page.getByTestId(`scenario-workflow-${id}`)).toBeVisible();
     await expect(page.getByTestId(`scenario-canvas-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "v2 新特征" })).toBeVisible();
+    await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "实际路线与证据" })).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "动态入口" })).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByText("server/discover", { exact: true }).first()).toBeVisible();
+    const firstRouteNode = page.getByTestId(`scenario-workflow-${id}`).locator(".scenario-route-rail button").first();
+    await expect(firstRouteNode).toBeVisible();
+    expect((await firstRouteNode.boundingBox())?.width ?? 0).toBeGreaterThan(100);
   }
 
   await expect(page.getByRole("button", { name: "刷新数据" })).toBeVisible();
@@ -111,6 +124,8 @@ test("keeps every animated workflow in its own closed loop", async ({ page }) =>
   await page.getByRole("button", { name: "运行闭环自检" }).click();
   await expect(page.getByTestId("scenario-workflow-loop").locator(".scenario-edge-running")).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-loop").getByText("闭环已通过", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("scenario-workflow-loop").locator(".scenario-step-inspector"))
+    .toContainText("discover-ttl=");
   const firstLoop = await page.request.get("/api/scenarios/loop/latest").then((response) => response.json()) as {
     report?: { runId?: string };
   };
