@@ -1,179 +1,198 @@
-# 验证报告
+# MCP v2 兼容性验证报告
 
 验证日期：2026-07-30
 
-## 环境
+## 1. 最终结论
 
-- Bun `1.3.14`
-- TypeScript `7.0.2`
-- Rsbuild `2.1.9`
-- React `19.2.8`
-- `@modelcontextprotocol/server` `2.0.0`
+| 评估对象 | 当前结论 | 支持程度 | 完成边界 |
+| --- | --- | ---: | --- |
+| MCP v2 正常运行 | 可用 | 约 90% | modern、auto、legacy、Tool、Resource 和结构化结果均通过 |
+| 当前已实现能力 | 全部通过 | 5/5 | `tools/resources/skills/apps/verification` |
+| 规划能力覆盖 | 部分完成 | 5/8（62.5%） | `prompts/tasks/auth` 尚未实现 |
+| Web Host MCP App | 通过 | 100%（当前用例） | 三种视图、四种状态、桌面和 390px 均通过 |
+| Codex CLI Tool 调用 | 通过 | 100%（当前用例） | CLI `0.145.0` 已直接调用 `orders.dashboard` |
+| Codex Desktop Tool 调用 | 通过 | 100%（当前用例） | 当前 task 已发现并调用 `orders.dashboard` |
+| Codex Desktop 内嵌 UI | 未验证 | 不计入通过 | 没有可确认的 App/widget 渲染事件 |
+| 公网生产就绪 | 未完成 | 不建议评级为完成 | 缺 Auth、持久化、限流、监控和生产错误治理 |
 
-## 自动化门禁
+结论口径：
 
-`bun run acceptance` 已通过：
+- “约 90%”描述当前 Demo 的 v2 正常运行成熟度，不代表覆盖 MCP v2 全部可选能力。
+- “5/8”只统计本项目定义的八类运行时能力，不等同于 MCP 官方规范覆盖率。
+- Tool 调用成功、Resource 可读取和 Desktop 实际渲染 App 是三个独立验收项。
 
-- 四个 workspace 的 TypeScript 7 类型检查。
-- 15 项 Bun 单元/契约测试。
-- Rsbuild 生产构建。
-- v2-first HTTP acceptance。
-- 6 项 Playwright 浏览器验收。
-- 桌面 Chromium 与 390px Chromium。
-- `orders.dashboard` 的 `_meta.ui.resourceUri`。
-- `ui://mcp-v2/orders-dashboard.html` Resource 与
-  `text/html;profile=mcp-app` MIME。
-- sandbox MCP App JSON-RPC `postMessage` bridge、初始结果回流和组件内
-  Tool 反向调用。
-- shadcn/ui Dashboard 的 `overview | orders | status` 视图，以及
-  `all | paid | pending | fulfilled` 状态筛选参数。
-- 浏览器内实际执行 `view=orders, status=paid`，返回并渲染唯一匹配的
-  `ord_demo_1001`，桌面与 390px 均通过。
-- Streamable HTTP、modern JSON response、legacy stateless SSE 响应帧，
-  以及无独立 SSE endpoint 断言。
-- Codex-oriented MCP Client acceptance。
+## 2. 协议兼容矩阵
 
-## 深度兼容审计结论
+| 路径 | 目标版本 | 协商方式 | 实际响应封装 | 状态 | 证据 |
+| --- | --- | --- | --- | --- | --- |
+| Modern pinned | `2026-07-28` | 显式 `pin` | `application/json` | 通过 | 实际协商版本和 era 均已断言 |
+| Auto negotiation | modern + legacy | `auto` | modern JSON | 通过 | 同时支持两个时代时优先选择 modern |
+| Legacy stateless | `2025-06-18` | 固定 `supportedProtocolVersions` | `text/event-stream` | 通过 | Tool 发现和 `orders.dashboard` 调用成功 |
+| 独立 SSE endpoint | 不提供 | 无 | 无 | 符合设计 | legacy SSE 只是同一 `/mcp` POST 的响应帧 |
+| `subscriptions/listen` | 不启用 | 能力不广告 | 无 | 符合设计 | `tools/resources.listChanged=false` |
 
-- modern Client 显式固定并实际协商到 `2026-07-28`；auto Client 在同时支持
-  modern 与 legacy 时会优先选择 `2026-07-28`。
-- legacy Client 同时通过 `supportedProtocolVersions` 与握手结果锁定
-  `2025-06-18`。仅设置 `mode: "legacy"` 会跟随 SDK 默认顺序，当前会协商
-  到 `2025-11-25`，不能作为 `2025-06-18` 兼容证据。
-- 验收会采集 `/mcp` 的真实响应头：modern 成功结果为
-  `application/json`，legacy stateless 成功结果包含
-  `text/event-stream`；没有独立 SSE endpoint。
-- Server 明确把 `tools.listChanged` 与 `resources.listChanged` 设为
-  `false`，避免发现阶段广告未使用的订阅能力。
-- 8 个 Tool 均有与行为一致的安全注解；6 个只读 Tool 明确声明只读、
-  非破坏、闭合世界和幂等。
-- 运行时八类能力中已实现 `tools/resources/skills/apps/verification`，
-  尚未实现 `prompts/tasks/auth`。因此不能宣称完整覆盖 MCP v2 的全部能力。
-- MCP App 宿主请求增加 10 秒超时和可见错误状态，宿主不响应时不再永久停留
-  在 Connecting。
-- 优化后使用本机 Codex CLI `0.145.0` 新建隔离会话
-  `019fb0d1-7dd6-78b2-82b1-25db931e9c98`，直接调用
-  `orders.dashboard(view=orders,status=paid)` 成功，Tool 事件返回
-  `ord_demo_1001`，且原始 `_meta` 包含 `openai/outputTemplate`。CLI 的最终
-  自然语言将该元数据误报为不存在，因此验收以原始 Tool 事件为准。
-- 当前 Codex Desktop task 已能发现并直接调用 `orders.dashboard`，同样返回
-  1 条 `ord_demo_1001`；本次调用没有向验收侧暴露 App/widget 渲染事件，
-  因此 Tool 调用标记通过，Desktop 内嵌 UI 仍保持未验证。
+重要修正：
 
-### E2E Lab
+| 原口径 | 审计结果 | 修正后口径 |
+| --- | --- | --- |
+| 所有 MCP 响应都是 JSON | 不准确 | modern 返回 JSON；legacy stateless 使用 SSE 响应帧 |
+| `mode: "legacy"` 等于验证 `2025-06-18` | 不准确 | 当前 SDK 默认会协商到 `2025-11-25` |
+| Server 不支持 SSE | 表述过宽 | 没有独立 SSE endpoint，但 legacy POST 结果存在 SSE framing |
 
-- `POST /api/e2e/run` 真实建立 modern `2026-07-28` 与 legacy Client。
-- 页面使用 `@xyflow/react` 将六个分组渲染为可缩放、可平移、可选择的
-  Scenario Flow，E2E 页面不加载狐狸或其他品牌 IP 图片。
-- 服务端返回真实报告后，20 个用例按原始顺序逐条经历 queued、running 和
-  passed/failed；播放结束后才生成汇总结论。
-- 20 个用例覆盖当前注册的 8 个 Tool、2 个应用层 Skill、验证成功/拒绝路径、
-  Dashboard 三种视图和 MCP App Resource 契约。
-- 最新报告可从 `GET /api/e2e/latest` 读取；页面不会补造成功结果。
-- 桌面与 390px 浏览器均执行“运行全部 E2E”，验证 React Flow 画布、
-  20 个用例的动效终态、场景切换和逐条证据，最终报告由服务端决定。
-- MCP App sandbox 依次通过 `Overview → Orders → Status`，并验证
-  `paid`、`fulfilled` 两次参数切换。
+## 3. 功能支持矩阵
 
-## 独立 Codex 会话
+| 能力 | 状态 | 实现方式 | 验收结果 |
+| --- | --- | --- | --- |
+| Tools | 已实现 | 8 个 MCP Tool | 8/8 发现和调用通过 |
+| Resources | 已实现 | `ui://mcp-v2/orders-dashboard.html` | list/read/MIME 通过 |
+| Skills | 已实现 | `skills.discover`、`skills.run` | 2/2 应用层 Skill 通过 |
+| Apps | 已实现 | sandbox iframe + JSON-RPC bridge | Web Host 通过 |
+| Verification | 已实现 | start/status/finish + 脱敏证据 | 成功和拒绝路径通过 |
+| Prompts | 未实现 | 未注册协议能力 | 不计入通过 |
+| Tasks | 未实现 | 未注册协议能力 | 不计入通过 |
+| Auth | 未实现 | 无 Bearer/OAuth/scope | 不具备公网生产条件 |
 
-- 旧任务仅执行 `bun run acceptance:codex`，不是 Codex 直接调用 MCP
-  Tool，也没有验证 App UI；该结果已作废。
-- 重新新建的 Codex task `019fadc4-f5b7-7493-b2d4-304773a8d4aa`
-  未发现 `mcp-v2-demo` 工具，因此 Tool 调用与任务内 App UI 均未通过。
-- 另用全新 `codex exec` 进程验证，Codex 以 `2025-06-18` 发起握手，
-  v2-only Server 正确拒绝并返回 `-32022 Unsupported protocol version`
-  （Server 只支持 `2026-07-28`）。
-- 为避免留下无法初始化的全局配置，验收后已移除
-  `mcp-v2-demo` Codex MCP 配置。
-- 当前不能把 Web Host 的 App UI 成功等同于 Codex 任务内 UI 成功。
+Skills 是由 Tool 组合出的应用层能力，不宣称为 MCP 核心原生对象。
 
-### Codex 0.147 alpha 复测
+## 4. Tool 验收矩阵
 
-- 独立 Codex CLI 曾升级为 `0.147.0-alpha.1` 并完成纯 v2 调用验证；
-  随后按兼容性复测要求回退到 `0.145.0`。
-- `mcp_2026_07_28` 已关闭；`enable_mcp_apps` 保持开启以等待 Desktop
-  重启后复测。
-- 已持久配置 `mcp-v2-demo` Streamable HTTP Server。
-- 新版 CLI 成功使用 `2026-07-28` 发现并直接调用
-  `orders.dashboard`，返回 3 条结构化订单数据；不再出现
-  `Unsupported protocol version`。
-- 当前运行中的 Codex Desktop 使用应用包内置旧后端，新建 task
-  `019fadde-52d7-7670-b5d7-1443e92961ed` 仍未发现该工具，因此
-  Desktop 内嵌 MCP App UI 尚未通过。
-- 官方 `0.147.0-alpha.1` macOS DMG 经只读挂载核验，仅包含 Codex
-  命令行二进制，不包含可独立升级的 Desktop GUI 应用。
+| Tool | 类型 | 安全注解 | 主要验收 |
+| --- | --- | --- | --- |
+| `system.health` | 只读 | 只读、非破坏、闭合世界、幂等 | 协议和传输声明 |
+| `orders.search` | 只读 | 只读、非破坏、闭合世界、幂等 | 命中和空结果 |
+| `orders.dashboard` | 只读 | 只读、非破坏、闭合世界、幂等 | 三视图、筛选、UI 元数据 |
+| `skills.discover` | 只读 | 只读、非破坏、闭合世界、幂等 | 发现 2 个 Skill |
+| `skills.run` | 只读 | 只读、非破坏、闭合世界、幂等 | 摘要、清单和未知 Skill |
+| `verification.status` | 只读 | 只读、非破坏、闭合世界、幂等 | 读取真实运行记录 |
+| `verification.start` | 状态写入 | 非破坏、闭合世界、非幂等 | 创建脱敏 run |
+| `verification.finish` | 状态写入 | 非破坏、闭合世界、非幂等 | 确认和拒绝路径 |
 
-### Codex 0.145 兼容复测
+`orders.dashboard` 的 Tool 声明与结果均包含：
 
-- `@modelcontextprotocol/server-legacy` 经安装检查后已移除：它只提供冻结
-  的 v1 SSE Transport 与旧 OAuth helpers，不负责 `2025-06-18`
-  Streamable HTTP 兼容。
-- Server 改用 `@modelcontextprotocol/server@2` 内置
-  `legacy: "stateless"`；没有增加 SSE endpoint。
-- `responseMode: "json"` 仅作用于 modern 请求；SDK 的 legacy
-  stateless fallback 会在相同 `/mcp` POST 端点返回
-  `text/event-stream` 响应帧。这不是独立 SSE endpoint，验收已分别锁定
-  modern JSON 与 legacy SSE framing。
-- SDK 集成验收同时通过现代 `2026-07-28` 与 legacy
-  `2025-06-18` Client 的工具发现和 `orders.dashboard` 调用。
-- 回退后的 Codex CLI `0.145.0` 成功发现并调用 `orders.dashboard`；
-  Tool 结果携带 `ui.resourceUri`、`ui/resourceUri` 与
-  `openai/outputTemplate`。
-- Desktop task `019fade7-bf9e-7563-afe6-694cc6336f29` 成功调用 Tool
-  并读取 `ui://mcp-v2/orders-dashboard.html`，但任务事件中没有
-  App/widget 渲染事件；因此内嵌 UI 仍标记为未通过，不能用读取 HTML
-  代替实际渲染。
+| 元数据 | 值 |
+| --- | --- |
+| `ui.resourceUri` | `ui://mcp-v2/orders-dashboard.html` |
+| `ui/resourceUri` | `ui://mcp-v2/orders-dashboard.html` |
+| `openai/outputTemplate` | `ui://mcp-v2/orders-dashboard.html` |
 
-### Skill 会话复测
+## 5. MCP App 验收
 
-- 使用回退后的 Codex CLI `0.145.0` 新建隔离会话，通过
-  `2025-06-18` legacy stateless fallback 直接调用
-  `skills.discover` 与 `skills.run`，没有使用 shell 代替 Tool 调用。
-- 成功发现 `order-summary` 与 `verification-checklist` 两个 Skill。
-- 成功执行 `order-summary`，输入演示订单 `ord_demo_1001`，返回
-  `ord_demo_1001: paid`。
-- 首轮调用因 Tool 缺少安全注解而被 Codex 自动审批取消；补齐只读、
-  非破坏、闭合世界和幂等注解后复测通过。
+| 场景 | 参数或动作 | 预期结果 | 状态 |
+| --- | --- | --- | --- |
+| 初始加载 | `view=overview,status=all` | 3 条订单和概览指标 | 通过 |
+| 订单筛选 | `view=orders,status=paid` | 仅返回 `ord_demo_1001` | 通过 |
+| 状态视图 | `view=status,status=fulfilled` | 展示 fulfilled 分布 | 通过 |
+| 组件反向调用 | Tabs / Select | iframe 经 host 再次调用 Tool | 通过 |
+| 单文件资源 | 读取 `ui://` | 无外部 script/stylesheet | 通过 |
+| 宿主异常 | 10 秒无响应 | 显示错误，不永久 Connecting | 已实现 |
+| Codex Desktop 内嵌渲染 | Desktop task | 出现可确认 widget | 未验证 |
 
-### 参数化 MCP App 复测
+## 6. 客户端验收
 
-- 独立 Codex CLI 会话 `019fadfc-9740-7382-bbcd-afba5e1809a0`
-  直接调用一次 `orders.dashboard`，参数为
-  `{"view":"orders","status":"paid"}`。
-- Tool 返回 `parameters.view=orders`、`parameters.status=paid`、1 条订单，
-  首条订单为 `ord_demo_1001`，同时保留 `ui://` Resource 元数据。
-- Web Host 将相同参数经 MCP Apps bridge 从 shadcn/ui 组件反向传给
-  Tool，并在 iframe 内动态切换到筛选后的订单表格。
-- Codex CLI 复测验证 Tool 与参数返回，不代表 Codex Desktop 已渲染
-  App UI；Desktop 内嵌 UI 状态仍沿用前述结论。
+| 客户端 | 协议 | Tool 发现 | Tool 调用 | UI 渲染 | 结论 |
+| --- | --- | --- | --- | --- | --- |
+| SDK modern Client | `2026-07-28` | 通过 | 通过 | 不适用 | 通过 |
+| SDK auto Client | 自动选择 modern | 通过 | 通过 | 不适用 | 通过 |
+| SDK legacy Client | `2025-06-18` | 通过 | 通过 | 不适用 | 通过 |
+| Codex CLI `0.145.0` | legacy stateless | 通过 | 通过 | CLI 不承诺内嵌 UI | 通过 |
+| 当前 Codex Desktop task | 当前宿主链路 | 通过 | 通过 | 未观察到 widget 事件 | Tool 通过，UI 未验证 |
+| 仓库 Web Host | modern | 通过 | 通过 | 通过 | 完整 App 链路通过 |
 
-`acceptance:codex` 仍会记录以下真实 Client 调用步骤：
+最新真实 Codex CLI 会话：
 
-1. `system.health`
-2. `skills.discover`
-3. `orders.search`
-4. `skills.run`
+| 项目 | 结果 |
+| --- | --- |
+| 会话 | `019fb0d1-7dd6-78b2-82b1-25db931e9c98` |
+| 调用 | `orders.dashboard(view=orders,status=paid)` |
+| 订单数 | 1 |
+| 首个订单 | `ord_demo_1001` |
+| 原始 Tool `_meta` | 包含 `openai/outputTemplate` |
+| 注意事项 | CLI 最终自然语言误报元数据不存在，验收以原始 Tool 事件为准 |
 
-记录只包含 Tool、脱敏 request id、耗时和状态，不包含 Token 或完整会话内容。
+## 7. 自动化门禁
 
-## 本地入口
+| 门禁 | 覆盖内容 | 结果 |
+| --- | --- | --- |
+| TypeScript | 4 个 workspace | 通过 |
+| Bun tests | 15 项单元/契约测试 | 15/15 |
+| Production build | Web、MCP App、Server | 通过 |
+| HTTP acceptance | modern、auto、legacy、响应头、Tool、Resource | 通过 |
+| 服务端 E2E | 6 组场景、20 个用例 | 20/20 |
+| Playwright | desktop Chromium + 390px | 6/6 |
+| Codex-oriented acceptance | health、Skill、订单、验证链 | 通过 |
+| 真实 Codex CLI | 直接调用 `orders.dashboard` | 通过 |
+| 当前 Desktop Tool | 发现并调用 `orders.dashboard` | 通过 |
+| Desktop App/widget | 实际内嵌渲染事件 | 未验证 |
 
-- 验证中心：http://localhost:3000/
-- MCP Server：http://localhost:3001/mcp
-- 状态：http://localhost:3001/api/status
-
-持久开发服务由当前 Codex task 启动；进程停止后可重新运行：
+完整门禁命令：
 
 ```bash
-bun run dev:mcp
-bun run dev:web
+bun run acceptance
 ```
 
-## 截图
+说明：`acceptance:codex` 验证 Codex-oriented MCP Client 链路，不单独证明
+Desktop 内嵌 UI；真实 CLI 和当前 Desktop Tool 调用已在上表独立列出。
 
-- `artifacts/overview.png`
-- `artifacts/mobile.png`
-- `artifacts/mcp-app-dashboard.png`
-- `artifacts/mcp-app-dashboard-filtered.png`
-- `artifacts/e2e-lab.png`
+## 8. E2E 覆盖
+
+| 分组 | 覆盖范围 |
+| --- | --- |
+| Protocol | modern、legacy、状态与响应封装 |
+| Discovery | 8 个 Tool、MCP App Resource |
+| Tools | health、订单命中/空结果、Dashboard 三视图 |
+| Skills | 发现、摘要、清单、未知 Skill 拒绝 |
+| Verification | 完整证据链、未确认拒绝 |
+| MCP Apps | 单文件 bridge、Tool 与 `ui://` 元数据 |
+
+E2E 页面只在服务端返回真实报告后播放 20 个用例的
+queued → running → passed/failed 状态，不在浏览器补造成功结果。
+
+## 9. 未完成项与优先级
+
+| 优先级 | 未完成项 | 影响 | 建议 |
+| --- | --- | --- | --- |
+| P0 | Auth | 不能安全暴露到公网 | 增加 Bearer/OAuth、scope、401/403 验收 |
+| P0 | 持久化与生产错误治理 | 当前验证运行保存在内存 | 增加存储、结构化日志、指标和恢复 |
+| P1 | Codex Desktop 内嵌 UI | Tool 可用但 widget 未确认 | 等待宿主能力后做真实渲染验收 |
+| P1 | Tasks | 无异步任务、取消和恢复 | 按真实业务需求实现 |
+| P2 | Prompts | 不提供 Prompt registry | 仅在需要公开 Prompt 能力时实现 |
+| P2 | Subscriptions | 不提供 list-changed 事件 | 有动态目录需求时再开启 |
+
+## 10. 历史复测摘要
+
+| 阶段 | 结果 | 当前意义 |
+| --- | --- | --- |
+| v2-only Server + Codex `2025-06-18` | 返回 `-32022` | 证明旧 Codex 需要 legacy fallback |
+| Codex CLI `0.147.0-alpha.1` | modern Tool 调用通过 | 证明纯 v2 客户端可运行 |
+| Codex CLI 回退 `0.145.0` | legacy Tool 和 Skill 通过 | 当前兼容基线 |
+| 早期 Desktop task | 有未发现 Tool 的失败记录 | 属于当时注入/宿主状态，不代表当前服务失败 |
+| 当前 Desktop task | Tool 发现和调用通过 | 当前结论；内嵌 UI 仍未验证 |
+
+## 11. 环境与入口
+
+| 项目 | 值 |
+| --- | --- |
+| Bun | `1.3.14` |
+| TypeScript | `7.0.2` |
+| Rsbuild | `2.1.9` |
+| React | `19.2.8` |
+| MCP Server SDK | `@modelcontextprotocol/server@2.0.0` |
+| 验证中心 | `http://localhost:3000/` |
+| MCP Server | `http://localhost:3001/mcp` |
+| 状态接口 | `http://localhost:3001/api/status` |
+
+本地启动：
+
+```bash
+bun run dev
+```
+
+主要截图：
+
+| 场景 | 文件 |
+| --- | --- |
+| Overview | `artifacts/overview.png` |
+| Mobile | `artifacts/mobile.png` |
+| MCP App | `artifacts/mcp-app-dashboard.png` |
+| MCP App filtered | `artifacts/mcp-app-dashboard-filtered.png` |
+| E2E Lab | `artifacts/e2e-lab.png` |
