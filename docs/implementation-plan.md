@@ -46,17 +46,21 @@ tests/e2e         真实浏览器验收
 
 ## 可视化验证中心
 
-前端必须由真实请求驱动，不允许硬编码通过状态。界面直接进入五个独立场景：
+前端必须由真实请求驱动，不允许硬编码通过状态。界面直接进入六个独立场景：
 
-| 场景 | 内容 |
+| 场景 | 独立闭环 |
 | --- | --- |
-| 01 协议 | discover、capability、modern JSON、legacy SSE framing |
-| 02 工具 | 13 个 Tool 的发现状态与职责 |
-| 03 技能 | Skill manifest、输入与执行入口 |
-| 04 MCP 应用 | iframe、bridge、Tool 代理和结果回流 |
-| 05 Codex 会话 | 真实客户端步骤、请求证据和 PASS/FAIL |
+| 00 闭环实验 | status → registry → catalogs → matrix → verdict → Ready，只检查自身且不触发其他场景 |
+| 01 协议 | modern → legacy → framing → boundary → verdict → Ready |
+| 02 工具 | discovery → annotations → calls → Tasks → verdict → Ready |
+| 03 技能 | Prompts → discovery → execution → input/error → verdict → Ready |
+| 04 MCP 应用 | metadata → Resource → bridge → render → verdict → Ready |
+| 05 Codex 会话 | start → calls → evidence → confirm → verdict → Ready |
 
-顶部状态栏统一显示服务状态、协议版本与当前场景；不再设置重复的总览和全链路入口。
+每个场景使用同一个定义驱动的 React Flow 渲染器，但拥有独立的运行状态、
+最新报告和服务端入口。运行开始后只播放真实响应中的步骤结果，不能预先显示
+通过。顶部状态栏只显示服务状态、协议版本与当前场景；不设置重复的总览和
+全链路入口。“刷新数据 / 运行会话验证”只放在 Scene 05 内。
 
 ## Codex 会话验收协议
 

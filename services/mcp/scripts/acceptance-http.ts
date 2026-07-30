@@ -1,6 +1,7 @@
 import { Client, type FetchLike, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { app, createApp } from "../src/index.ts";
 import { LEGACY_PROTOCOL_VERSION, MODERN_PROTOCOL_VERSION, RUNTIME_CAPABILITIES } from "../src/domain.ts";
+import { SCENARIO_IDS, type ScenarioReport } from "../src/scenario-runner.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -231,6 +232,40 @@ async function main() {
     ]) {
       assert(e2e.cases?.some((item) => item.id === id && item.status === "passed"), `missing passed E2E case ${id}`);
     }
+
+    const scenarioRegistry = await fetch(`${baseUrl}/api/scenarios`).then((response) => response.json()) as {
+      scenarios?: string[];
+      reports?: { id?: string; report?: unknown }[];
+    };
+    assert(JSON.stringify(scenarioRegistry.scenarios) === JSON.stringify(SCENARIO_IDS), "scenario registry must preserve Scene 00–05 order");
+    assert(scenarioRegistry.reports?.length === SCENARIO_IDS.length, "scenario registry must expose six independent report slots");
+
+    const sceneRuns: ScenarioReport[] = [];
+    for (const scenarioId of SCENARIO_IDS) {
+      const response = await fetch(`${baseUrl}/api/scenarios/${scenarioId}/run`, {
+        method: "POST",
+        headers: { accept: "application/json" },
+      });
+      assert(response.ok, `${scenarioId} scenario must return HTTP 200`);
+      const report = await response.json() as ScenarioReport;
+      assert(report.scenarioId === scenarioId, `${scenarioId} scenario returned a mismatched report`);
+      assert(report.status === "passed" && report.steps.length === 5, `${scenarioId} scenario must pass five real steps`);
+      assert(report.steps.every((step) => step.status === "passed"), `${scenarioId} scenario must not manufacture a passed verdict`);
+      sceneRuns.push(report);
+    }
+    assert(new Set(sceneRuns.map((report) => report.runId)).size === SCENARIO_IDS.length, "every scenario must own a distinct runId");
+
+    const loopRunId = sceneRuns.find((report) => report.scenarioId === "loop")?.runId;
+    const loopLatest = await fetch(`${baseUrl}/api/scenarios/loop/latest`).then((response) => response.json()) as {
+      report?: ScenarioReport;
+    };
+    assert(loopLatest.report?.runId === loopRunId, "running other scenes must not mutate the Scene 00 report");
+    const securedRegistry = await fetch(`${securedBaseUrl}/api/scenarios`).then((response) => response.json()) as {
+      reports?: { report?: unknown }[];
+    };
+    assert(securedRegistry.reports?.every(({ report }) => report === null), "scenario reports must not leak across app instances");
+    assert((await fetch(`${baseUrl}/api/scenarios/unknown/run`, { method: "POST" })).status === 404, "unknown scenario runs must return HTTP 404");
+
     assert(mcpResponses.length > 0, "MCP response content types were not observed");
     assert(
       mcpResponses

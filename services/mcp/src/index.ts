@@ -20,6 +20,11 @@ import {
 import { runVerification } from "./verification-runner.ts";
 import { callMcpAppTool, loadMcpApp } from "./mcp-app-host.ts";
 import { getLatestE2eReport, runE2eSuite } from "./e2e-runner.ts";
+import {
+  SCENARIO_IDS,
+  createScenarioRunner,
+  isScenarioId,
+} from "./scenario-runner.ts";
 
 const port = Number.parseInt(Bun.env.PORT ?? "3001", 10);
 const MCP_AUTH_SCOPE = "mcp:access";
@@ -76,6 +81,7 @@ export function createApp(options: AppOptions = {}) {
   const internalAuthToken = auth?.tokens.find((candidate) =>
     (auth.requiredScopes ?? [MCP_AUTH_SCOPE]).every((scope) => candidate.scopes.includes(scope))
   )?.token;
+  const scenarioRunner = createScenarioRunner();
 
   return {
     async fetch(request: Request): Promise<Response> {
@@ -108,6 +114,16 @@ export function createApp(options: AppOptions = {}) {
           return json(await runE2eSuite(new URL("/mcp", url), internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "E2E suite failed" }, 500);
+        }
+      }
+      const scenarioRunMatch = url.pathname.match(/^\/api\/scenarios\/([^/]+)\/run$/);
+      if (request.method === "POST" && scenarioRunMatch !== null) {
+        const scenarioId = scenarioRunMatch[1] ?? "";
+        if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
+        try {
+          return json(await scenarioRunner.runScenario(scenarioId, new URL("/mcp", url), internalAuthToken));
+        } catch (error) {
+          return json({ error: error instanceof Error ? error.message : "Scenario failed" }, 500);
         }
       }
       if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
@@ -145,6 +161,18 @@ export function createApp(options: AppOptions = {}) {
       if (url.pathname === "/api/orders") return json({ orders: listOrders(url.searchParams.get("query") ?? undefined) });
       if (url.pathname === "/api/skills") return json({ skills: discoverSkills() });
       if (url.pathname === "/api/e2e/latest") return json({ report: getLatestE2eReport() ?? null });
+      if (url.pathname === "/api/scenarios") {
+        return json({
+          scenarios: SCENARIO_IDS,
+          reports: scenarioRunner.listScenarioReports(),
+        });
+      }
+      const scenarioLatestMatch = url.pathname.match(/^\/api\/scenarios\/([^/]+)\/latest$/);
+      if (scenarioLatestMatch !== null) {
+        const scenarioId = scenarioLatestMatch[1] ?? "";
+        if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
+        return json({ report: scenarioRunner.getScenarioReport(scenarioId) ?? null });
+      }
       if (url.pathname === "/api/demo/tools") {
         return json({
           tools: [

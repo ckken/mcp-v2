@@ -21,7 +21,8 @@
 | Prompts | 2 个原生 MCP Prompt，modern 与 legacy 均可发现和渲染 | 通过 |
 | Tasks | 5 个应用级 Task Tool，覆盖创建、轮询、列表、取消和结果 | 通过 |
 | Auth | 可配置 Bearer Token + scope，覆盖 401/403/授权调用 | 通过 |
-| Case Pulse E2E | React Flow 场景地图逐条呈现 modern + legacy 的 25 个用例 | 25/25 |
+| 独立场景闭环 | 6 个 React Flow 动画工作流，各自运行 5 个真实检查步骤 | 6/6 |
+| 服务端 E2E | modern + legacy 的 25 个自动化用例 | 25/25 |
 
 这里的 legacy SSE 仅指 `2025-06-18` stateless POST 响应的
 `text/event-stream` 封装；项目没有旧式独立 SSE endpoint，也没有实现
@@ -35,9 +36,14 @@ Tasks 也采用 `tasks.*` Tool 模型，因为当前 `2026-07-28` SDK 已不提�
 
 ## 场景化验证中心
 
-验证中心不再提供“总览”和“全链路验收”入口，而是直接进入五个独立现场：
-协议、工具、技能、MCP 应用和 Codex 会话。顶部状态栏持续显示服务状态、
-协议版本和当前场景编号；自动化 25 个用例仍由服务端门禁执行。
+验证中心不再提供“总览”和“全链路验收”入口，而是直接进入六个独立闭环：
+闭环实验、协议、工具、技能、MCP 应用和 Codex 会话。每个场景都有自己的
+React Flow 动画、运行按钮、五步真实报告和回到 Ready 的闭环；运行某一场景
+不会改写其他场景。顶部状态栏只显示服务状态、协议版本和当前场景编号，
+原顶部的“刷新数据 / 运行会话验证”只在 Scene 05 内出现。
+
+Scene 00 只检查服务状态、场景注册、能力目录与能力矩阵，不触发 01–05。
+服务端的 25 个自动化用例仍作为独立门禁执行，不再作为全局 UI 入口。
 
 `orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
 Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
@@ -77,7 +83,7 @@ bun run acceptance
 
 ```text
 apps/mcp-app   shadcn/ui MCP App，构建为单文件 HTML
-apps/web       React Flow 逐用例验证中心与 MCP App Host
+apps/web       六场景 React Flow 闭环验证中心与 MCP App Host
 services/mcp   Bun MCP Server、Tool、Resource 和验收脚本
 packages/shared
                共享契约与测试夹具

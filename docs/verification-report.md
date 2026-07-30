@@ -11,6 +11,7 @@
 | Modern MCP | 通过 | 当前用例 100% | 固定协商 `2026-07-28`，成功响应为 JSON |
 | Legacy Codex 兼容 | 通过 | 当前用例 100% | `2025-06-18` stateless fallback，结果使用 SSE 响应帧 |
 | Web Host MCP App | 通过 | 当前用例 100% | 桌面与 390px、三视图、动态筛选、反向 Tool 调用 |
+| 独立场景闭环 | 通过 | 6/6（100%） | Scene 00–05 各自运行五步真实检查，报告与运行状态隔离 |
 | Auth 基线 | 通过 | Demo/内网基线 | Bearer Token、scope、401、403、授权调用；不等同完整 OAuth/OIDC |
 | Codex Desktop 内嵌 UI | 未验证 | 不计入通过 | Tool 可调用，但尚无可确认的 widget 渲染证据 |
 | 公网生产就绪 | 未完成 | 不建议直接上线 | 仍缺外部身份源、持久化、限流、监控和多实例治理 |
@@ -34,6 +35,7 @@
 | Tasks | 5 个应用级 Task Tool | create/status/list/cancel/result | 轮询、完成、取消、结果、未知 ID 通过 |
 | Auth | 可配置 Bearer Token + scope | `MCP_AUTH_TOKEN` 或注入配置 | 401、403、合法 Client 调用通过 |
 | Verification | start/status/finish | 服务端证据链判定 | 确认通过与拒绝失败路径均通过 |
+| 场景工作流 | 6 个独立 API + React Flow | 每场景五步报告与独立 latest 槽位 | 6/6 通过，跨场景和跨 app 实例隔离通过 |
 
 > Tasks 使用应用级 Tool 模型。当前 `@modelcontextprotocol/server@2.0.0`
 > 的 `2026-07-28` 运行时不提供旧版原生 Tasks；项目没有伪造已移除的协议能力。
@@ -106,11 +108,11 @@
 | 门禁 | 实际结果 |
 | --- | --- |
 | TypeScript | 4 个 workspace 通过 |
-| Bun tests | 16/16 |
+| Bun tests | 20/20 |
 | Production build | Web、MCP App、Server 通过 |
-| HTTP acceptance | 通过，含 Prompt、Task、Auth |
+| HTTP acceptance | 通过，含 Prompt、Task、Auth、6 个场景闭环与隔离 |
 | 服务端 E2E | 25/25 |
-| Playwright | desktop + 390px，6/6 |
+| Playwright | desktop + 390px，8/8 |
 | Codex-oriented acceptance | 通过 |
 
 ## 7. 客户端与 UI

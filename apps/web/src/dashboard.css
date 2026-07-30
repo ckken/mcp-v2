@@ -18,6 +18,10 @@
   background: var(--destructive);
 }
 
+.status-dot.skipped {
+  background: var(--muted-foreground);
+}
+
 .status-dot.checking,
 .status-dot.running {
   background: var(--chart-4);

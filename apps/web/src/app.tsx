@@ -4,16 +4,14 @@ import {
   BotIcon,
   BracesIcon,
   PanelsTopLeftIcon,
-  PlayIcon,
-  RefreshCwIcon,
   ServerIcon,
   SparklesIcon,
+  WorkflowIcon,
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -50,25 +48,23 @@ import {
 } from "@/components/ui/table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { asRuns, type VerificationRunView } from "./runs";
+import type { ScenarioId } from "./scenario-report";
+import { ScenarioWorkflow } from "./scenario-workflow";
+import { SCENARIOS } from "./scenarios";
 
 type Health = "online" | "unavailable" | "checking";
-type Page = "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
+type Page = ScenarioId;
 type Run = VerificationRunView;
 
-const pages: Array<{
-  id: Page;
-  label: string;
-  scene: string;
-  signal: string;
-  description: string;
-  icon: LucideIcon;
-}> = [
-  { id: "Protocol", label: "协议", scene: "01", signal: "协商现场", description: "观察 modern、legacy 与响应封装的真实边界。", icon: BracesIcon },
-  { id: "Tools", label: "工具", scene: "02", signal: "调用现场", description: "逐项确认 13 个 Tool 的发现状态与职责。", icon: WrenchIcon },
-  { id: "Skills", label: "技能", scene: "03", signal: "编排现场", description: "查看应用级 Skill 的发现、输入与执行入口。", icon: SparklesIcon },
-  { id: "MCP Apps", label: "MCP 应用", scene: "04", signal: "交互现场", description: "从 Tool 元数据进入 ui:// 资源并观察宿主通信。", icon: PanelsTopLeftIcon },
-  { id: "Codex Session", label: "Codex 会话", scene: "05", signal: "验证现场", description: "回看真实 Client 调用、服务端证据与最终状态。", icon: BotIcon },
-];
+const pageIcons: Record<Page, LucideIcon> = {
+  loop: WorkflowIcon,
+  protocol: BracesIcon,
+  tools: WrenchIcon,
+  skills: SparklesIcon,
+  "mcp-apps": PanelsTopLeftIcon,
+  codex: BotIcon,
+};
+const pages = SCENARIOS.map((scenario) => ({ ...scenario, icon: pageIcons[scenario.id] }));
 
 const protocolRows = [
   ["server/discover", "发现服务端能力", "必需"],
@@ -119,14 +115,11 @@ function DashboardPageButton({
 }
 
 export function App() {
-  const [page, setPage] = useState<Page>("Protocol");
+  const [page, setPage] = useState<Page>("loop");
   const [health, setHealth] = useState<Health>("checking");
   const [runs, setRuns] = useState<Run[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
 
   const refresh = async () => {
-    setRefreshing(true);
     try {
       const [statusResult, runsResult] = await Promise.allSettled([
         fetch("/api/status", { headers: { accept: "application/json" } }),
@@ -138,28 +131,6 @@ export function App() {
     } catch {
       setHealth("unavailable");
       setRuns([]);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const runVerification = async () => {
-    setRefreshing(true);
-    setRunError(null);
-    try {
-      const response = await fetch("/api/verification/run", {
-        method: "POST",
-        headers: { accept: "application/json" },
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({})) as { error?: unknown };
-        throw new Error(typeof payload.error === "string" ? payload.error : `HTTP ${response.status}`);
-      }
-      await refresh();
-      setPage("Codex Session");
-    } catch (error) {
-      setRunError(error instanceof Error ? error.message : "会话验证失败");
-      setRefreshing(false);
     }
   };
 
@@ -173,13 +144,13 @@ export function App() {
           <SidebarHeader>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton size="lg" tooltip="MCP v2 验证中心" onClick={() => setPage("Protocol")}>
+                <SidebarMenuButton size="lg" tooltip="MCP v2 验证中心" onClick={() => setPage("loop")}>
                   <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <ActivityIcon />
                   </span>
                   <span className="grid min-w-0 flex-1 text-left">
                     <strong className="truncate text-sm">MCP v2 验证中心</strong>
-                    <span className="truncate text-xs text-muted-foreground">五个验证场景</span>
+                    <span className="truncate text-xs text-muted-foreground">六个独立闭环</span>
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -225,16 +196,6 @@ export function App() {
               <span>SCENE {currentPage.scene}</span>
               <strong>{currentPage.label}</strong>
             </div>
-            <div className="flex items-center gap-2">
-              <Button aria-label="刷新数据" variant="outline" size="sm" disabled={refreshing} onClick={() => void refresh()}>
-                <RefreshCwIcon data-icon="inline-start" />
-                <span className="hidden sm:inline">刷新数据</span>
-              </Button>
-              <Button aria-label="运行会话验证" size="sm" disabled={refreshing} onClick={() => void runVerification()}>
-                <PlayIcon data-icon="inline-start" />
-                <span className="hidden sm:inline">{refreshing ? "正在运行…" : "运行会话验证"}</span>
-              </Button>
-            </div>
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
@@ -245,18 +206,17 @@ export function App() {
                 <AlertDescription>依赖实时数据的检查不会显示为通过，请启动 MCP 服务后刷新。</AlertDescription>
               </Alert>
             )}
-            {runError !== null && (
-              <Alert variant="destructive">
-                <AlertTitle>会话验证失败</AlertTitle>
-                <AlertDescription>{runError}</AlertDescription>
-              </Alert>
-            )}
             <SceneStage page={currentPage}>
-              {page === "Protocol" && <Protocol />}
-              {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" icon={WrenchIcon} />}
-              {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" icon={SparklesIcon} />}
-              {page === "MCP Apps" && <McpApps />}
-              {page === "Codex Session" && <Session runs={runs} />}
+              <ScenarioWorkflow
+                key={page}
+                definition={currentPage}
+                {...(page === "codex" ? { onRefresh: refresh, onCompleted: refresh } : {})}
+              />
+              {page === "protocol" && <Protocol />}
+              {page === "tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" icon={WrenchIcon} />}
+              {page === "skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" icon={SparklesIcon} />}
+              {page === "mcp-apps" && <McpApps />}
+              {page === "codex" && <Session runs={runs} />}
             </SceneStage>
           </div>
         </SidebarInset>

@@ -1,0 +1,339 @@
+.scenario-workflow {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+}
+
+.scenario-workflow-header,
+.scenario-workflow-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.scenario-workflow-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.scenario-workflow-header p {
+  margin: 0 0 0.25rem;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+.scenario-workflow-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.scenario-workflow-header div > span {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+
+.scenario-workflow-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scenario-canvas {
+  width: 100%;
+  height: min(56vw, 31rem);
+  min-height: 25rem;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 38%),
+    var(--muted);
+}
+
+.scenario-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  width: 12.5rem;
+  min-height: 4.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  background: var(--card);
+  box-shadow: 0 0.5rem 1.75rem color-mix(in oklch, var(--foreground) 7%, transparent);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.scenario-node-index {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.scenario-node-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.scenario-node-copy strong {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenario-node-copy small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.58rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenario-node-state {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.scenario-node-state svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.scenario-node time {
+  grid-column: 2 / 4;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+}
+
+.scenario-node-running {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 14%, transparent);
+  transform: translateY(-2px);
+}
+
+.scenario-node-running .scenario-node-state {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.scenario-node-running .scenario-node-state svg {
+  animation: scenario-spin 0.9s linear infinite;
+}
+
+.scenario-node-passed {
+  border-color: color-mix(in oklch, var(--chart-2) 55%, var(--border));
+}
+
+.scenario-node-passed .scenario-node-state {
+  color: white;
+  background: var(--chart-2);
+}
+
+.scenario-node-failed {
+  border-color: var(--destructive);
+}
+
+.scenario-node-failed .scenario-node-state {
+  color: white;
+  background: var(--destructive);
+}
+
+.scenario-node-skipped {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.scenario-node-skipped .scenario-node-state {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.scenario-canvas .react-flow__edge-path {
+  stroke: var(--muted-foreground);
+  stroke-width: 1.5;
+}
+
+.scenario-canvas .scenario-edge-running .react-flow__edge-path {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+
+.scenario-canvas .scenario-edge-passed .react-flow__edge-path {
+  stroke: var(--chart-2);
+}
+
+.scenario-canvas .scenario-edge-failed .react-flow__edge-path {
+  stroke: var(--destructive);
+}
+
+.scenario-canvas .scenario-edge-skipped .react-flow__edge-path {
+  stroke: var(--muted-foreground);
+  stroke-dasharray: 4 5;
+}
+
+.scenario-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.scenario-canvas .react-flow__controls-button {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+.scenario-workflow-footer {
+  border-top: 1px solid var(--border);
+}
+
+.scenario-live-state {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.scenario-live-state div {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.scenario-live-state strong,
+.scenario-live-state small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenario-live-state strong {
+  font-size: 0.78rem;
+}
+
+.scenario-live-state small {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+.scenario-workflow-badges {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+}
+
+.scenario-evidence {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+  background: var(--border);
+  gap: 1px;
+}
+
+.scenario-evidence article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.9rem;
+  background: var(--card);
+}
+
+.scenario-evidence article div {
+  min-width: 0;
+}
+
+.scenario-evidence strong {
+  display: block;
+  font-size: 0.67rem;
+}
+
+.scenario-evidence p,
+.scenario-evidence code {
+  display: block;
+  overflow: hidden;
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.55rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.scenario-evidence code {
+  white-space: nowrap;
+}
+
+.scenario-evidence time {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+}
+
+@keyframes scenario-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .scenario-evidence {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-canvas {
+    height: 28rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .scenario-workflow-header,
+  .scenario-workflow-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scenario-workflow-actions {
+    width: 100%;
+  }
+
+  .scenario-workflow-actions button {
+    flex: 1;
+  }
+
+  .scenario-canvas {
+    height: 27rem;
+    min-height: 27rem;
+  }
+
+  .scenario-node {
+    width: 11rem;
+  }
+
+  .scenario-workflow-badges {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scenario-node,
+  .scenario-node-running .scenario-node-state svg {
+    animation: none;
+    transition: none;
+  }
+}

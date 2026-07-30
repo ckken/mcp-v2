@@ -1,4 +1,4 @@
-# 全链路 E2E 验收规划
+# 独立场景与 E2E 验收规划
 
 ## 完成边界
 
@@ -7,6 +7,8 @@
 | Modern | Client 固定 `2026-07-28` |
 | Legacy | Client 固定 `2025-06-18`，验证同一 `/mcp` 的 stateless fallback |
 | 结果来源 | `POST /api/e2e/run` 实时生成，前端不补造成功状态 |
+| 场景来源 | `POST /api/scenarios/:id/run` 只生成该场景的五步报告 |
+| 场景隔离 | 六个 latest report 槽位相互独立，不跨应用实例泄露 |
 | Tasks | 验收 `tasks.*` 应用级 Tool，不宣称旧版原生 Tasks |
 | Auth | 独立安全服务验证 401、403 和合法 Bearer 调用 |
 | Desktop UI | Tool 调用和 App/widget 渲染分开判定 |
@@ -36,9 +38,11 @@
 
 | 检查项 | 预期 |
 | --- | --- |
-| React Flow | 六个场景节点和链路可见 |
-| 用例回放 | 25 个真实用例依次经过 queued、running、passed/failed |
-| 场景切换 | 每组用例 ID、状态、耗时和脱敏证据可核对 |
+| React Flow | Scene 00–05 各自显示 Ready、五个步骤和回到 Ready 的闭环 |
+| 结果回放 | 只播放当前场景真实报告中的 queued、running、passed/failed |
+| 场景隔离 | 运行 Scene 00 或 01 后，另一场景的 `runId` 保持不变 |
+| 场景切换 | 每个场景的步骤 ID、状态、耗时和脱敏证据可核对 |
+| 操作位置 | 顶部无全局触发；刷新和会话验证只出现在 Scene 05 |
 | 桌面 | Chromium 完整通过 |
 | 移动端 | 390px 无横向溢出，交互完整 |
 | MCP App | Overview → Orders → paid → Status → fulfilled |
@@ -51,6 +55,6 @@
 | `bun run test` | 单元与契约测试全部通过 |
 | `bun run build` | Web、MCP App、Server 构建通过 |
 | `bun run acceptance:http` | 协议、Prompt、Tool、Task、Auth 通过 |
-| `bun run acceptance:browser` | desktop + 390px 共 6 项通过 |
+| `bun run acceptance:browser` | desktop + 390px 共 8 项通过 |
 | `bun run acceptance:codex` | Codex-oriented 调用链通过 |
 | `bun run acceptance` | 汇总门禁全绿且 E2E 为 25/25 |
