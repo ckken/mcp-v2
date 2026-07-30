@@ -22,6 +22,9 @@ ENV PORT=3000
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/services/mcp/node_modules ./services/mcp/node_modules
+COPY --from=build /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/shared/src ./packages/shared/src
 COPY --from=build /app/services/mcp/src ./services/mcp/src
 COPY --from=build /app/apps/mcp-app/dist ./apps/mcp-app/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
