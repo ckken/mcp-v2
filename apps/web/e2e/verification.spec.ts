@@ -63,6 +63,10 @@ test("renders every navigation entry as an independent scene", async ({ page }) 
   await expect(page.getByText("总览", { exact: true })).toHaveCount(0);
   await expect(page.getByText("全链路验收", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("MCP 服务在线");
+  const githubEntry = page.getByRole("link", { name: "在 GitHub 查看 mcp-v2" });
+  await expect(githubEntry).toBeVisible();
+  await expect(githubEntry).toHaveAttribute("href", "https://github.com/ckken/mcp-v2");
+  await expect(githubEntry).toHaveAttribute("target", "_blank");
   await expect(page.locator(".scene-stage-header")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "刷新数据" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "运行会话验证" })).toHaveCount(0);

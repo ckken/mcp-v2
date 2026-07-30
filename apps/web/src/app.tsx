@@ -3,6 +3,7 @@ import {
   ActivityIcon,
   BotIcon,
   BracesIcon,
+  GitForkIcon,
   PanelsTopLeftIcon,
   ServerIcon,
   SparklesIcon,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -196,6 +198,17 @@ export function App() {
               <span>SCENE {currentPage.scene}</span>
               <strong>{currentPage.label}</strong>
             </div>
+            <Button asChild variant="outline" size="sm">
+              <a
+                href="https://github.com/ckken/mcp-v2"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="在 GitHub 查看 mcp-v2"
+              >
+                <GitForkIcon data-icon="inline-start" aria-hidden="true" />
+                <span className="hidden sm:inline">GitHub</span>
+              </a>
+            </Button>
           </header>
 
           <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
