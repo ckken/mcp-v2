@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { asE2eReport, type E2eGroup, type E2eReportView } from "./e2e";
 import { asRuns, type VerificationRunView } from "./runs";
 
 type Health = "online" | "unavailable" | "checking";
-type Page = "Overview" | "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
+type Page = "Overview" | "E2E Lab" | "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
 type Run = VerificationRunView;
 
-const pages: Page[] = ["Overview", "Protocol", "Tools", "Skills", "MCP Apps", "Codex Session"];
+const pages: Page[] = ["Overview", "E2E Lab", "Protocol", "Tools", "Skills", "MCP Apps", "Codex Session"];
 const protocolRows = [
   ["server/discover", "Modern capability discovery", "required"],
   ["request envelope", "Protocol version on every request", "required"],
@@ -76,6 +77,7 @@ export function App() {
       {health === "unavailable" && <div className="notice" role="status">Backend unavailable — data-dependent checks are not reported as successful. Start the MCP service, then refresh.</div>}
       {runError !== null && <div className="notice" role="alert">Verification failed: {runError}</div>}
       {page === "Overview" && <Overview health={health} runs={runs} passed={passed} active={active} />}
+      {page === "E2E Lab" && <E2eLab />}
       {page === "Protocol" && <Protocol />}
       {page === "Tools" && <Catalog title="Tool registry" items={demoTools} endpoint="/api/demo/tools" />}
       {page === "Skills" && <Catalog title="Skill registry" items={demoSkills} endpoint="/api/demo/skills" />}
@@ -93,6 +95,98 @@ function Overview({ health, runs, passed, active }: { health: Health; runs: Run[
 
 function Metric({ label, value }: { label: string; value: string }) { return <article className="metric"><p>{label}</p><strong>{value}</strong></article>; }
 function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
+
+const e2eGroups: E2eGroup[] = ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"];
+
+function E2eLab() {
+  const [report, setReport] = useState<E2eReportView | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadLatest = async () => {
+    const response = await fetch("/api/e2e/latest", { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setReport(asE2eReport(await response.json()));
+  };
+
+  const runAll = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/e2e/run", {
+        method: "POST",
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: unknown };
+        throw new Error(typeof payload.error === "string" ? payload.error : `HTTP ${response.status}`);
+      }
+      const next = asE2eReport(await response.json());
+      if (next === null) throw new Error("E2E report contract is invalid");
+      setReport(next);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "E2E suite failed");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLatest().catch((cause) => setError(cause instanceof Error ? cause.message : "E2E report unavailable"));
+  }, []);
+
+  return <div className="e2e-page">
+    <section className="panel e2e-command">
+      <div>
+        <p className="eyebrow">LIVE ACCEPTANCE SUITE</p>
+        <h3>全链路 E2E 验收</h3>
+        <p className="muted">真实连接 modern 与 legacy MCP Client，逐条执行 Tool、Skill、验证状态和 MCP App 契约。</p>
+      </div>
+      <button className="refresh" disabled={running} onClick={() => void runAll()}>
+        {running ? "正在执行…" : "运行全部 E2E"}
+      </button>
+    </section>
+    {error !== null && <div className="notice" role="alert">E2E 运行失败：{error}</div>}
+    {report === null ? <Empty text="还没有 E2E 报告。点击“运行全部 E2E”开始真实验收。" /> : <>
+      <section className={`e2e-verdict ${report.status}`} aria-label="E2E summary">
+        <div>
+          <p className="eyebrow">LATEST RUN</p>
+          <h2>{report.status === "passed" ? `${report.total} 个用例全部通过` : `${report.failed} 个用例失败`}</h2>
+          <p>{report.runId} · MCP {report.protocolVersion}</p>
+        </div>
+        <div className="e2e-score"><strong>{report.passed}</strong><span>/ {report.total}</span></div>
+      </section>
+      <section className="metrics e2e-metrics">
+        <Metric label="用例总数" value={String(report.total)} />
+        <Metric label="通过" value={String(report.passed)} />
+        <Metric label="失败" value={String(report.failed)} />
+        <Metric label="协议版本" value={report.protocolVersion} />
+      </section>
+      <div className="e2e-groups">
+        {e2eGroups.map((group) => {
+          const cases = report.cases.filter((item) => item.group === group);
+          return <section className="panel e2e-group" key={group}>
+            <div className="panel-head">
+              <div><p className="eyebrow">E2E GROUP</p><h3>{group}</h3></div>
+              <span className="badge">{cases.filter((item) => item.status === "passed").length}/{cases.length}</span>
+            </div>
+            <div className="e2e-cases">
+              {cases.map((item) => <article className={`e2e-case ${item.status}`} data-testid={`e2e-case-${item.id}`} key={item.id}>
+                <span className={`status ${item.status}`} />
+                <div className="e2e-case-main">
+                  <div className="e2e-case-title"><strong>{item.title}</strong><code>{item.id}</code></div>
+                  <p>{item.detail}</p>
+                  {item.evidence.length > 0 && <div className="e2e-evidence">{item.evidence.map((value) => <span key={value}>{value}</span>)}</div>}
+                </div>
+                <small>{item.durationMs}ms</small>
+              </article>)}
+            </div>
+          </section>;
+        })}
+      </div>
+    </>}
+  </div>;
+}
 
 function Protocol() { return <section className="panel"><div className="panel-head"><div><p className="eyebrow">JSON-RPC LIFECYCLE</p><h3>Protocol checkpoints</h3></div><span className="badge">MCP</span></div><div className="table">{protocolRows.map(([event, evidence, state]) => <div className="row" key={event}><code>{event}</code><span>{evidence}</span><span className="badge">{state}</span></div>)}</div><p className="muted protocol-note">These checks describe expected evidence; their live result comes from the backend verification feed.</p></section>; }
 

@@ -10,6 +10,7 @@ import {
 } from "./domain.ts";
 import { runVerification } from "./verification-runner.ts";
 import { callMcpAppTool, loadMcpApp } from "./mcp-app-host.ts";
+import { getLatestE2eReport, runE2eSuite } from "./e2e-runner.ts";
 
 const port = Number.parseInt(Bun.env.PORT ?? "3001", 10);
 
@@ -38,6 +39,13 @@ export const app = {
         return json({ error: error instanceof Error ? error.message : "Verification failed" }, 500);
       }
     }
+    if (request.method === "POST" && url.pathname === "/api/e2e/run") {
+      try {
+        return json(await runE2eSuite(new URL("/mcp", url)));
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : "E2E suite failed" }, 500);
+      }
+    }
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
     if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false });
     if (url.pathname === "/api/mcp-app") {
@@ -54,6 +62,7 @@ export const app = {
     }
     if (url.pathname === "/api/orders") return json({ orders: listOrders(url.searchParams.get("query") ?? undefined) });
     if (url.pathname === "/api/skills") return json({ skills: discoverSkills() });
+    if (url.pathname === "/api/e2e/latest") return json({ report: getLatestE2eReport() ?? null });
     if (url.pathname === "/api/demo/tools") {
       return json({
         tools: [

@@ -73,6 +73,23 @@ async function main() {
     const finish = await client.callTool({ name: "verification.finish", arguments: { runId: run.runId, confirmed: true } });
     assert((finish.structuredContent as { status: string }).status === "passed", "verification must pass after full chain");
     await client.close();
+
+    const e2eResponse = await fetch(`${baseUrl}/api/e2e/run`, {
+      method: "POST",
+      headers: { accept: "application/json" },
+    });
+    assert(e2eResponse.ok, "E2E API must return HTTP 200");
+    const e2e = await e2eResponse.json() as {
+      status?: string;
+      total?: number;
+      passed?: number;
+      failed?: number;
+      cases?: { id?: string; status?: string }[];
+    };
+    assert(e2e.status === "passed" && e2e.total === 20 && e2e.passed === 20 && e2e.failed === 0, "all 20 E2E cases must pass");
+    for (const id of ["protocol.modern", "protocol.legacy", "skills.order-summary", "skills.unknown", "verification.success", "verification.rejected", "mcp-app.resource"]) {
+      assert(e2e.cases?.some((item) => item.id === id && item.status === "passed"), `missing passed E2E case ${id}`);
+    }
     console.log("acceptance:http PASS");
   } finally {
     server.stop(true);

@@ -18,6 +18,7 @@
 | MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过 |
 | 参数化 Dashboard | `view`、`status`、`query` 驱动 shadcn/ui 界面 | 桌面浏览器与 390px 已通过 |
 | Codex 会话验收 | 新会话直接调用 Tool，并记录脱敏证据 | 已通过 |
+| E2E Lab | modern + legacy Client 实时执行 20 个用例 | 20/20 |
 
 `orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
 Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
@@ -63,5 +64,5 @@ packages/shared
                共享契约与测试夹具
 ```
 
-详细结果见 [验证报告](./docs/verification-report.md)，实现范围见
-[实施计划](./docs/implementation-plan.md)。
+详细结果见 [验证报告](./docs/verification-report.md)。本轮用例范围和完成边界
+记录在 [E2E 验收规划](./docs/e2e-acceptance-plan.md)。

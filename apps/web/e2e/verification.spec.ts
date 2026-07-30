@@ -20,13 +20,45 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
   });
 });
 
-test("renders the sandboxed MCP App bridge and remains usable at 390px", async ({ page }) => {
+test("runs and renders the complete 20-case E2E matrix", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "E2E Lab" }).click();
+  await expect(page.getByRole("heading", { name: "全链路 E2E 验收" })).toBeVisible();
+  await page.getByRole("button", { name: "运行全部 E2E" }).click();
+
+  await expect(page.getByRole("heading", { name: "20 个用例全部通过" })).toBeVisible();
+  await expect(page.getByLabel("E2E summary")).toContainText("20/ 20");
+  for (const group of ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"]) {
+    await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
+  }
+  for (const id of [
+    "protocol.modern",
+    "protocol.legacy",
+    "discovery.tools",
+    "tool.dashboard-status",
+    "skills.order-summary",
+    "skills.checklist",
+    "skills.unknown",
+    "verification.success",
+    "verification.rejected",
+    "mcp-app.resource",
+  ]) {
+    await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(/passed/);
+  }
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(overflow).toBe(false);
+});
+
+test("renders every dynamic MCP App view and remains usable at 390px", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "MCP Apps" }).click();
   await expect(page.getByText("Tool result delivered to ui:// resource")).toBeVisible();
   await expect(page.getByText("ui://mcp-v2/orders-dashboard.html")).toBeVisible();
   await expect(page.getByText("text/html;profile=mcp-app")).toBeVisible();
 
+  const frameElement = page.locator('iframe[title="MCP App orders dashboard"]');
+  await frameElement.scrollIntoViewIfNeeded();
   const frame = page.frameLocator('iframe[title="MCP App orders dashboard"]');
   await expect(frame.getByText("3 demo orders · view=overview · status=all")).toBeVisible();
   await frame.getByRole("tab", { name: "Orders" }).click();
@@ -39,6 +71,15 @@ test("renders the sandboxed MCP App bridge and remains usable at 390px", async (
   await expect(frame.getByText("ord_demo_1001")).toBeVisible();
   await expect(frame.getByText("ord_demo_1002")).toHaveCount(0);
   await expect(page.getByText("Widget called orders.dashboard(view=orders, status=paid) through host")).toBeVisible();
+
+  await frame.getByRole("tab", { name: "Status" }).click();
+  await expect(frame.getByRole("heading", { name: "Fulfillment status" })).toBeVisible();
+  await expect(page.getByText("Widget called orders.dashboard(view=status, status=paid) through host")).toBeVisible();
+
+  await frame.getByRole("combobox", { name: "Filter order status" }).click();
+  await frame.getByRole("option", { name: "Fulfilled", exact: true }).click();
+  await expect(frame.getByText("1 demo orders · view=status · status=fulfilled")).toBeVisible();
+  await expect(page.getByText("Widget called orders.dashboard(view=status, status=fulfilled) through host")).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);

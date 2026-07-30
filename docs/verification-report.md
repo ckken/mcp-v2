@@ -1,6 +1,6 @@
 # 验证报告
 
-验证日期：2026-07-29
+验证日期：2026-07-30
 
 ## 环境
 
@@ -15,10 +15,10 @@
 `bun run acceptance` 已通过：
 
 - 四个 workspace 的 TypeScript 7 类型检查。
-- 13 项 Bun 单元/契约测试。
+- 15 项 Bun 单元/契约测试。
 - Rsbuild 生产构建。
 - v2-first HTTP acceptance。
-- 4 项 Playwright 浏览器验收。
+- 6 项 Playwright 浏览器验收。
 - 桌面 Chromium 与 390px Chromium。
 - `orders.dashboard` 的 `_meta.ui.resourceUri`。
 - `ui://mcp-v2/orders-dashboard.html` Resource 与
@@ -31,6 +31,16 @@
   `ord_demo_1001`，桌面与 390px 均通过。
 - JSON HTTP、legacy stateless fallback 和 no-SSE 断言。
 - Codex-oriented MCP Client acceptance。
+
+### E2E Lab
+
+- `POST /api/e2e/run` 真实建立 modern `2026-07-28` 与 legacy Client。
+- 20 个用例覆盖当前注册的 8 个 Tool、2 个应用层 Skill、验证成功/拒绝路径、
+  Dashboard 三种视图和 MCP App Resource 契约。
+- 最新报告可从 `GET /api/e2e/latest` 读取；页面不会补造成功结果。
+- 桌面与 390px 浏览器均执行“运行全部 E2E”，结果为 `20/20`。
+- MCP App sandbox 依次通过 `Overview → Orders → Status`，并验证
+  `paid`、`fulfilled` 两次参数切换。
 
 ## 独立 Codex 会话
 
@@ -129,3 +139,4 @@ bun run dev:web
 - `artifacts/mobile.png`
 - `artifacts/mcp-app-dashboard.png`
 - `artifacts/mcp-app-dashboard-filtered.png`
+- `artifacts/e2e-lab.png`
