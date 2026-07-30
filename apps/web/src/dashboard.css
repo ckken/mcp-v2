@@ -1,0 +1,400 @@
+.status-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+}
+
+.status-dot.online,
+.status-dot.passed {
+  background: var(--chart-2);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--chart-2) 14%, transparent);
+}
+
+.status-dot.unavailable,
+.status-dot.failed {
+  background: var(--destructive);
+}
+
+.status-dot.checking,
+.status-dot.running {
+  background: var(--chart-4);
+}
+
+.e2e-experience {
+  --blue: var(--primary);
+  --green: var(--chart-2);
+  --red: var(--destructive);
+  --orange: var(--chart-4);
+  gap: 1rem;
+  min-width: 0;
+}
+
+.flow-overline {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.flow-overline span {
+  background: var(--foreground);
+}
+
+.case-hero {
+  min-height: 390px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 82% 45%, color-mix(in oklch, var(--muted) 70%, transparent), transparent 32%),
+    var(--card);
+  box-shadow: none;
+}
+
+.case-hero::before {
+  opacity: 0.25;
+  background-image: radial-gradient(var(--muted-foreground) 0.6px, transparent 0.6px);
+  mask-image: linear-gradient(90deg, transparent 35%, #000);
+}
+
+.case-hero-copy {
+  padding: clamp(2rem, 5vw, 4rem);
+}
+
+.case-hero h2 {
+  margin: 1rem 0;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: clamp(2.6rem, 5.4vw, 4.8rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.case-hero h2 em {
+  color: var(--foreground);
+}
+
+.case-hero-copy > p:not(.flow-overline) {
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.case-run-button {
+  min-width: 210px;
+  border-radius: var(--radius-lg);
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: none;
+}
+
+.case-run-button:hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in oklch, var(--primary) 85%, transparent);
+  box-shadow: none;
+}
+
+.case-run-icon {
+  border-radius: var(--radius-md);
+  color: var(--primary);
+  background: var(--primary-foreground);
+}
+
+.case-live-note {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.case-live-note i {
+  background: var(--chart-2);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--chart-2) 14%, transparent);
+}
+
+.case-hero-visual {
+  min-height: 380px;
+}
+
+.case-matrix-core {
+  width: 154px;
+  height: 154px;
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+  box-shadow: 0 16px 48px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+.case-matrix-core span,
+.case-matrix-core small {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.case-matrix-core strong {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 4rem;
+}
+
+.case-matrix-orbit,
+.case-radar,
+.case-radar-two {
+  border-color: var(--border);
+}
+
+.case-matrix-orbit i {
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  background: var(--card);
+  box-shadow: none;
+  font-family: var(--font-mono);
+}
+
+.scenario-board,
+.case-playback,
+.scene-inspector,
+.flow-verdict,
+.scene-rail {
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: none;
+}
+
+.scenario-board-head,
+.case-playback > header,
+.scene-inspector > header {
+  border-color: var(--border);
+}
+
+.scenario-board-head h3,
+.case-playback h3,
+.scene-inspector h3,
+.flow-verdict h2 {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.flow-legend,
+.scenario-coordinate {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.scenario-canvas {
+  height: 560px;
+  background: var(--muted);
+}
+
+.react-flow__edge-path {
+  stroke: var(--muted-foreground);
+}
+
+.flow-edge-active .react-flow__edge-path {
+  stroke: var(--foreground);
+}
+
+.flow-edge-passed .react-flow__edge-path {
+  stroke: var(--chart-2);
+}
+
+.react-flow__controls {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+.flow-scene,
+.runner-core {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: none;
+}
+
+.flow-scene.is-selected {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--foreground);
+}
+
+.flow-scene-passed,
+.runner-core-passed {
+  border-color: color-mix(in oklch, var(--chart-2) 45%, var(--border));
+}
+
+.flow-scene-index {
+  color: var(--border);
+}
+
+.flow-scene-copy small,
+.flow-scene-copy span,
+.flow-scene-score,
+.runner-copy p,
+.runner-copy small {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.flow-scene-copy strong,
+.runner-copy strong {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.runner-core {
+  background: var(--background);
+}
+
+.runner-copy span {
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
+
+.runner-rings,
+.runner-rings i {
+  border-color: var(--border);
+}
+
+.case-playback > header,
+.case-pulse {
+  background: var(--card);
+}
+
+.case-pulse-grid {
+  background: var(--border);
+}
+
+.case-pulse > span,
+.case-pulse strong,
+.case-pulse small,
+.playback-now {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.case-pulse-running {
+  background: color-mix(in oklch, var(--chart-4) 10%, var(--card));
+}
+
+.case-pulse-failed {
+  background: color-mix(in oklch, var(--destructive) 8%, var(--card));
+}
+
+.scene-rail button {
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  background: var(--card);
+}
+
+.scene-rail button:hover,
+.scene-rail button.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.scene-rail span,
+.scene-rail small {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.flow-verdict {
+  background: var(--card);
+}
+
+.flow-verdict.failed {
+  background: color-mix(in oklch, var(--destructive) 6%, var(--card));
+}
+
+.flow-verdict-stamp,
+.scene-score {
+  color: var(--chart-2);
+}
+
+.flow-verdict.failed .flow-verdict-stamp {
+  color: var(--destructive);
+}
+
+.flow-verdict-stamp span,
+.flow-verdict-stamp small,
+.flow-verdict div:nth-child(2) > p:last-child,
+.flow-verdict-counters small,
+.scene-score span {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+}
+
+.flow-verdict-counters strong,
+.scene-case strong {
+  color: var(--foreground);
+}
+
+.scene-case {
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+}
+
+.scene-case:hover {
+  transform: none;
+  background: var(--accent);
+}
+
+.scene-case.failed {
+  background: color-mix(in oklch, var(--destructive) 8%, var(--card));
+}
+
+.scene-case p {
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+}
+
+.scene-case code {
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
+
+.scene-evidence span {
+  color: var(--muted-foreground);
+  background: var(--background);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 1000px) {
+  .case-hero {
+    min-height: 690px;
+  }
+
+  .case-hero-visual {
+    inset: 280px 0 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .case-hero {
+    min-height: 660px;
+    border-radius: var(--radius-xl);
+  }
+
+  .case-hero-copy {
+    padding: 1.5rem;
+  }
+
+  .case-hero h2 {
+    font-size: 2.75rem;
+  }
+
+  .case-hero-visual {
+    inset: 350px -90px -30px;
+  }
+
+  .scenario-canvas {
+    height: 480px;
+  }
+}

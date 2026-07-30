@@ -1,4 +1,59 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  ActivityIcon,
+  BotIcon,
+  BracesIcon,
+  CircleCheckIcon,
+  FlaskConicalIcon,
+  LayoutDashboardIcon,
+  PanelsTopLeftIcon,
+  PlayIcon,
+  RadioIcon,
+  RefreshCwIcon,
+  ServerIcon,
+  SparklesIcon,
+  WrenchIcon,
+  type LucideIcon,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { E2eFlowLab } from "./e2e-flow";
 import { asRuns, type VerificationRunView } from "./runs";
 
@@ -6,42 +61,59 @@ type Health = "online" | "unavailable" | "checking";
 type Page = "Overview" | "E2E Lab" | "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
 type Run = VerificationRunView;
 
-const pages: Page[] = ["Overview", "E2E Lab", "Protocol", "Tools", "Skills", "MCP Apps", "Codex Session"];
-const pageLabels: Record<Page, string> = {
-  Overview: "总览",
-  "E2E Lab": "全链路验收",
-  Protocol: "协议",
-  Tools: "工具",
-  Skills: "技能",
-  "MCP Apps": "MCP 应用",
-  "Codex Session": "Codex 会话",
-};
+const pages: Array<{ id: Page; label: string; icon: LucideIcon }> = [
+  { id: "Overview", label: "总览", icon: LayoutDashboardIcon },
+  { id: "E2E Lab", label: "全链路验收", icon: FlaskConicalIcon },
+  { id: "Protocol", label: "协议", icon: BracesIcon },
+  { id: "Tools", label: "工具", icon: WrenchIcon },
+  { id: "Skills", label: "技能", icon: SparklesIcon },
+  { id: "MCP Apps", label: "MCP 应用", icon: PanelsTopLeftIcon },
+  { id: "Codex Session", label: "Codex 会话", icon: BotIcon },
+];
+
 const protocolRows = [
   ["server/discover", "发现服务端能力", "必需"],
   ["request envelope", "每次请求都携带协议版本", "必需"],
   ["modern response", "2026 版本返回 application/json", "必需"],
-  ["legacy fallback", "2025 版本的无状态 POST 使用 SSE 帧", "已启用"],
+  ["legacy fallback", "2025 版本无状态 POST 使用 SSE 帧", "已启用"],
   ["SSE endpoint", "不提供独立的旧版 SSE 端点", "已关闭"],
-  ["prompts/list + get", "2 个原生 Prompt，modern 与 legacy 可用", "已启用"],
-  ["tasks.* tools", "应用级创建、轮询、列表、取消和结果", "已启用"],
-  ["bearer auth", "配置 Token 后启用 scope 校验", "可配置"],
 ];
-const demoTools = [
-  "system.health",
-  "orders.search",
-  "orders.dashboard",
-  "skills.discover",
-  "skills.run",
-  "verification.start",
-  "verification.status",
-  "verification.finish",
-  "tasks.create",
-  "tasks.status",
-  "tasks.list",
-  "tasks.cancel",
-  "tasks.result",
-];
+const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
 const demoSkills = ["skills.discover", "skills.run"];
+
+function pageLabel(page: Page) {
+  return pages.find((item) => item.id === page)?.label ?? page;
+}
+
+function DashboardPageButton({
+  id,
+  label,
+  icon: Icon,
+  active,
+  onSelect,
+}: {
+  id: Page;
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  onSelect: (page: Page) => void;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  return (
+    <SidebarMenuButton
+      isActive={active}
+      tooltip={label}
+      onClick={() => {
+        onSelect(id);
+        if (isMobile) setOpenMobile(false);
+      }}
+    >
+      <Icon />
+      <span>{label}</span>
+    </SidebarMenuButton>
+  );
+}
 
 export function App() {
   const [page, setPage] = useState<Page>("Overview");
@@ -92,42 +164,251 @@ export function App() {
   const passed = useMemo(() => runs.filter((run) => run.status === "passed").length, [runs]);
   const active = useMemo(() => runs.filter((run) => run.status === "running").length, [runs]);
 
-  return <main className="shell">
-    <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">M</span><span>MCP v2 实验室</span></div>
-      <nav aria-label="验证页面">{pages.map((item) => <button className={page === item ? "nav active" : "nav"} key={item} onClick={() => setPage(item)}>{pageLabels[item]}</button>)}</nav>
-      <div className="side-foot"><span className={`dot ${health}`} /> {health === "online" ? "服务已连接" : health === "checking" ? "正在连接" : "服务不可用"}</div>
-    </aside>
-    <section className="content">
-      <header className="topbar"><div><p className="eyebrow">MCP v2 可视化验证</p><h1>{pageLabels[page]}</h1></div><div className="actions"><button className="ghost" disabled={refreshing} onClick={() => void refresh()}>刷新数据</button><button className="refresh" disabled={refreshing} onClick={() => void runVerification()}>{refreshing ? "正在运行…" : "运行会话验证"}</button></div></header>
-      {health === "unavailable" && <div className="notice" role="status">后端没有响应。依赖实时数据的检查不会显示为通过，请启动 MCP 服务后刷新。</div>}
-      {runError !== null && <div className="notice" role="alert">会话验证失败：{runError}</div>}
-      {page === "Overview" && <Overview health={health} runs={runs} passed={passed} active={active} />}
-      {page === "E2E Lab" && <E2eFlowLab />}
-      {page === "Protocol" && <Protocol />}
-      {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" />}
-      {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" />}
-      {page === "MCP Apps" && <McpApps />}
-      {page === "Codex Session" && <Session runs={runs} />}
-    </section>
-  </main>;
+  return (
+    <TooltipProvider>
+      <SidebarProvider style={{ "--sidebar-width": "15rem" } as CSSProperties}>
+        <Sidebar collapsible="icon" variant="inset">
+          <SidebarHeader>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton size="lg" tooltip="MCP v2 验证中心" onClick={() => setPage("Overview")}>
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <ActivityIcon />
+                  </span>
+                  <span className="grid min-w-0 flex-1 text-left">
+                    <strong className="truncate text-sm">MCP v2 验证中心</strong>
+                    <span className="truncate text-xs text-muted-foreground">全功能实验链路</span>
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>验证页面</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {pages.map(({ id, label, icon: Icon }) => (
+                    <SidebarMenuItem key={id}>
+                      <DashboardPageButton
+                        id={id}
+                        label={label}
+                        icon={Icon}
+                        active={page === id}
+                        onSelect={setPage}
+                      />
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter>
+            <div className="flex items-center gap-2 rounded-lg border bg-background p-2 text-xs group-data-[collapsible=icon]:justify-center">
+              <span className={`status-dot ${health}`} />
+              <span className="truncate group-data-[collapsible=icon]:hidden">
+                {health === "online" ? "服务已连接" : health === "checking" ? "正在连接" : "服务不可用"}
+              </span>
+            </div>
+          </SidebarFooter>
+          <SidebarRail />
+        </Sidebar>
+
+        <SidebarInset>
+          <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="h-4" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">MCP v2 可视化验证</p>
+              <h1 className="truncate text-base font-medium">{pageLabel(page)}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button aria-label="刷新数据" variant="outline" size="sm" disabled={refreshing} onClick={() => void refresh()}>
+                <RefreshCwIcon data-icon="inline-start" />
+                <span className="hidden sm:inline">刷新数据</span>
+              </Button>
+              <Button aria-label="运行会话验证" size="sm" disabled={refreshing} onClick={() => void runVerification()}>
+                <PlayIcon data-icon="inline-start" />
+                <span className="hidden sm:inline">{refreshing ? "正在运行…" : "运行会话验证"}</span>
+              </Button>
+            </div>
+          </header>
+
+          <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+            {health === "unavailable" && (
+              <Alert variant="destructive">
+                <ServerIcon />
+                <AlertTitle>后端没有响应</AlertTitle>
+                <AlertDescription>依赖实时数据的检查不会显示为通过，请启动 MCP 服务后刷新。</AlertDescription>
+              </Alert>
+            )}
+            {runError !== null && (
+              <Alert variant="destructive">
+                <AlertTitle>会话验证失败</AlertTitle>
+                <AlertDescription>{runError}</AlertDescription>
+              </Alert>
+            )}
+            {page === "Overview" && <Overview health={health} runs={runs} passed={passed} active={active} />}
+            {page === "E2E Lab" && <E2eFlowLab />}
+            {page === "Protocol" && <Protocol />}
+            {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" icon={WrenchIcon} />}
+            {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" icon={SparklesIcon} />}
+            {page === "MCP Apps" && <McpApps />}
+            {page === "Codex Session" && <Session runs={runs} />}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
+  );
 }
 
 function Overview({ health, runs, passed, active }: { health: Health; runs: Run[]; passed: number; active: number }) {
-  return <><section className="hero"><div><p className="eyebrow">实时状态</p><h2>先看清每一条链路，<br />再交给 Agent。</h2><p className="muted">协议、工具、技能、MCP 应用和 Codex 会话都在这里验证。结果来自当前服务，不用静态样例冒充通过。</p></div><div className={`health-card ${health}`}><span className="dot"/><strong>{health === "online" ? "服务可以访问" : health === "checking" ? "正在联系服务" : "服务暂时不可用"}</strong><small>{health === "online" ? "/api/status 已响应" : "还没有收到成功响应"}</small></div></section>
-  <section className="metrics"><Metric label="验证记录" value={String(runs.length)} /><Metric label="已通过" value={String(passed)} /><Metric label="运行中" value={String(active)} /><Metric label="传输状态" value={health === "online" ? "在线" : "—"} /></section>
-  <section className="panel"><div className="panel-head"><div><p className="eyebrow">最近执行</p><h3>会话验证记录</h3></div><span className="subtle">{runs.length ? "实时 API 结果" : "暂无记录"}</span></div>{runs.length ? <div className="run-list">{runs.map((run) => <div className="run" key={run.id}><span className={`status ${run.status}`}/><div><strong>{run.name}</strong><small>{run.id}</small></div><span>{run.finishedAt ?? run.status}</span></div>)}</div> : <Empty text="服务返回 /api/verification/runs 后，执行记录会显示在这里。" />}</section></>;
+  return (
+    <>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Metric label="验证记录" value={String(runs.length)} detail="服务端累计执行" icon={ActivityIcon} />
+        <Metric label="已通过" value={String(passed)} detail="完成真实证据检查" icon={CircleCheckIcon} />
+        <Metric label="运行中" value={String(active)} detail="当前活动会话" icon={RadioIcon} />
+        <Metric label="传输状态" value={health === "online" ? "在线" : "—"} detail="Streamable HTTP" icon={ServerIcon} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.7fr)]">
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>最近验证记录</CardTitle>
+            <CardDescription>只显示最近 8 次服务端执行，完整轨迹可在 Codex 会话中查看。</CardDescription>
+            <CardAction><Badge variant="outline">实时 API</Badge></CardAction>
+          </CardHeader>
+          <CardContent>
+            {runs.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>状态</TableHead>
+                    <TableHead>名称</TableHead>
+                    <TableHead className="hidden md:table-cell">运行 ID</TableHead>
+                    <TableHead className="text-right">完成时间</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {runs.slice(0, 8).map((run) => (
+                    <TableRow key={run.id}>
+                      <TableCell><RunBadge status={run.status} /></TableCell>
+                      <TableCell className="font-medium">{run.name}</TableCell>
+                      <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">{run.id}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{run.finishedAt ?? "执行中"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : <Empty text="服务返回执行记录后会显示在这里。" />}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>服务状态</CardTitle>
+            <CardDescription>页面只呈现当前服务返回的数据。</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <span className={`status-dot ${health}`} />
+              <div>
+                <p className="font-medium">{health === "online" ? "服务可以访问" : health === "checking" ? "正在联系服务" : "服务暂时不可用"}</p>
+                <p className="font-mono text-xs text-muted-foreground">{health === "online" ? "/api/status 已响应" : "还没有收到成功响应"}</p>
+              </div>
+            </div>
+            <div className="grid gap-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">协议版本</span><code>2026-07-28</code></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">传输方式</span><span>Streamable HTTP</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">独立 SSE</span><Badge variant="secondary">关闭</Badge></div>
+            </div>
+          </CardContent>
+          <CardFooter className="text-xs text-muted-foreground">结果来自当前进程，不使用静态通过状态。</CardFooter>
+        </Card>
+      </div>
+    </>
+  );
 }
 
-function Metric({ label, value }: { label: string; value: string }) { return <article className="metric"><p>{label}</p><strong>{value}</strong></article>; }
-function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
+function Metric({ label, value, detail, icon: Icon }: { label: string; value: string; detail: string; icon: LucideIcon }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl font-semibold tabular-nums">{value}</CardTitle>
+        <CardAction><Icon className="text-muted-foreground" /></CardAction>
+      </CardHeader>
+      <CardFooter className="text-xs text-muted-foreground">{detail}</CardFooter>
+    </Card>
+  );
+}
 
-function Protocol() { return <section className="panel"><div className="panel-head"><div><p className="eyebrow">JSON-RPC 生命周期</p><h3>协议检查点</h3></div><span className="badge">MCP</span></div><div className="table">{protocolRows.map(([event, evidence, state]) => <div className="row" key={event}><code>{event}</code><span>{evidence}</span><span className="badge">{state}</span></div>)}</div><p className="muted protocol-note">这里列出预期证据，实际结果以服务端验证记录为准。</p></section>; }
+function RunBadge({ status }: { status: Run["status"] }) {
+  return <Badge variant={status === "passed" ? "secondary" : status === "failed" ? "destructive" : "outline"}>{status === "passed" ? "通过" : status === "failed" ? "失败" : "运行中"}</Badge>;
+}
 
-function Catalog({ title, items, endpoint }: { title: string; items: string[]; endpoint: string }) {
+function Empty({ text }: { text: string }) {
+  return <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{text}</div>;
+}
+
+function Protocol() {
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle>协议检查点</CardTitle>
+        <CardDescription>预期证据与兼容状态，实际结论以服务端验证记录为准。</CardDescription>
+        <CardAction><Badge>MCP 2026</Badge></CardAction>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader><TableRow><TableHead>事件</TableHead><TableHead>检查内容</TableHead><TableHead className="text-right">状态</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {protocolRows.map(([event, evidence, state]) => (
+              <TableRow key={event}>
+                <TableCell><code>{event}</code></TableCell>
+                <TableCell>{evidence}</TableCell>
+                <TableCell className="text-right"><Badge variant="outline">{state}</Badge></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Catalog({ title, items, endpoint, icon: Icon }: { title: string; items: string[]; endpoint: string; icon: LucideIcon }) {
   const [available, setAvailable] = useState<boolean | null>(null);
-  useEffect(() => { let current = true; void fetch(endpoint, { headers: { accept: "application/json" } }).then((response) => { if (current) setAvailable(response.ok); }).catch(() => { if (current) setAvailable(false); }); return () => { current = false; }; }, [endpoint]);
-  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">能力发现</p><h3>{title}</h3></div><code>{endpoint}</code></div><div className="catalog">{items.map((item) => <article key={item}><span className="terminal">⌘</span><div><strong>{item}</strong><p>等待服务端返回详细定义</p></div><span className="badge">实验</span></article>)}</div><p className="muted protocol-note">{available === true ? "实验端点已响应，条目仍明确标记为实验数据。" : available === false ? "实验端点不可用，页面没有伪造服务端结果。" : "正在检查实验端点…"}</p></section>;
+  useEffect(() => {
+    let current = true;
+    void fetch(endpoint, { headers: { accept: "application/json" } })
+      .then((response) => { if (current) setAvailable(response.ok); })
+      .catch(() => { if (current) setAvailable(false); });
+    return () => { current = false; };
+  }, [endpoint]);
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{available === true ? "实验端点已响应，条目仍标记为实验数据。" : available === false ? "实验端点不可用，页面没有伪造结果。" : "正在检查实验端点…"}</CardDescription>
+        <CardAction><Badge variant="outline">{endpoint}</Badge></CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <Card size="sm" key={item}>
+            <CardHeader>
+              <span className="flex size-8 items-center justify-center rounded-lg bg-muted"><Icon /></span>
+              <CardTitle className="font-mono">{item}</CardTitle>
+              <CardDescription>等待服务端返回详细定义</CardDescription>
+              <CardAction><Badge variant="secondary">实验</Badge></CardAction>
+            </CardHeader>
+          </Card>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 function McpApps() {
@@ -146,7 +427,7 @@ function McpApps() {
         return response.json();
       })
       .then((payload) => setApp(payload))
-      .catch((error) => setMessage(error instanceof Error ? error.message : "MCP App unavailable"));
+      .catch((error) => setMessage(error instanceof Error ? error.message : "MCP App 不可用"));
   }, []);
 
   useEffect(() => {
@@ -178,7 +459,7 @@ function McpApps() {
         const result = await response.json();
         frameRef.current?.contentWindow?.postMessage(response.ok
           ? { jsonrpc: "2.0", id: rpc.id, result }
-          : { jsonrpc: "2.0", id: rpc.id, error: { code: -32000, message: result.error ?? "Tool call failed" } }, "*");
+          : { jsonrpc: "2.0", id: rpc.id, error: { code: -32000, message: result.error ?? "工具调用失败" } }, "*");
         const args = params?.arguments && typeof params.arguments === "object"
           ? params.arguments as { view?: unknown; status?: unknown }
           : {};
@@ -191,10 +472,59 @@ function McpApps() {
     return () => window.removeEventListener("message", listener);
   }, [app]);
 
-  return <section className="apps-grid"><div className="panel bridge"><p className="eyebrow">真实 MCP Apps 链路</p><h3>工具关联的沙箱资源</h3><p className="muted">宿主先发现工具元数据，再通过 MCP 读取 ui:// 资源，最后经 JSON-RPC postMessage 把工具结果交给界面。</p><div className="bridge-event"><span className="dot checking"/>{message}</div><code>{app?.descriptor._meta?.ui?.resourceUri ?? "正在解析 ui://"}</code><code>{app?.resource.mimeType ?? "正在解析 MIME"}</code></div>{app && <iframe ref={frameRef} title="MCP App 订单看板" sandbox="allow-scripts" srcDoc={app.resource.text} />}</section>;
+  return (
+    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <Card>
+        <CardHeader>
+          <CardTitle>真实 MCP Apps 链路</CardTitle>
+          <CardDescription>宿主发现工具元数据，读取 ui:// 资源，再通过 JSON-RPC postMessage 传递工具结果。</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+            <span className="status-dot checking" />
+            <span>{message}</span>
+          </div>
+          <code className="break-all rounded-md bg-muted p-2 text-xs">{app?.descriptor._meta?.ui?.resourceUri ?? "正在解析 ui://"}</code>
+          <code className="break-all rounded-md bg-muted p-2 text-xs">{app?.resource.mimeType ?? "正在解析 MIME"}</code>
+        </CardContent>
+      </Card>
+      {app ? (
+        <iframe ref={frameRef} className="min-h-[720px] w-full rounded-xl border bg-card" title="MCP App 订单看板" sandbox="allow-scripts" srcDoc={app.resource.text} />
+      ) : (
+        <Card><CardContent><Empty text="正在加载 MCP App 资源。" /></CardContent></Card>
+      )}
+    </div>
+  );
 }
 
 function Session({ runs }: { runs: Run[] }) {
   const latest = runs[0];
-  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">Agent 执行轨迹</p><h3>Codex 会话</h3></div><span className="badge">{latest?.status ?? "只读"}</span></div><div className="timeline"><div><b>01</b><span>发现服务端能力</span></div><div><b>02</b><span>通过真实 MCP 客户端运行限定范围的验证</span></div><div><b>03</b><span>{runs.length ? `已收到 ${runs.length} 条后端执行记录` : "等待后端执行记录"}</span></div>{latest?.steps?.map((step, index) => <div key={step}><b>{String(index + 4).padStart(2, "0")}</b><span>{step}</span></div>)}</div><p className="muted protocol-note">{latest === undefined ? "服务公开会话记录后才会显示在这里，页面不会编造执行轨迹。" : `最近一次执行 ${latest.id}，状态为 ${latest.status}。`}</p></section>;
+  const baseSteps = ["发现服务端能力", "通过真实 MCP 客户端运行限定范围的验证", runs.length ? `已收到 ${runs.length} 条后端执行记录` : "等待后端执行记录"];
+  const steps = [...baseSteps, ...(latest?.steps ?? [])];
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle>Codex 会话</CardTitle>
+        <CardDescription>记录真实客户端调用和服务端返回，不生成模拟执行轨迹。</CardDescription>
+        <CardAction><RunBadge status={latest?.status ?? "running"} /></CardAction>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader><TableRow><TableHead className="w-16">步骤</TableHead><TableHead>执行内容</TableHead><TableHead className="text-right">证据</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {steps.map((step, index) => (
+              <TableRow key={`${index}-${step}`}>
+                <TableCell className="font-mono text-muted-foreground">{String(index + 1).padStart(2, "0")}</TableCell>
+                <TableCell className="font-medium">{step}</TableCell>
+                <TableCell className="text-right"><Badge variant="outline">{index < 3 ? "会话" : "MCP"}</Badge></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+      <CardFooter className="text-xs text-muted-foreground">
+        {latest === undefined ? "服务公开会话记录后才会显示在这里。" : `最近一次执行 ${latest.id}，状态为 ${latest.status}。`}
+      </CardFooter>
+    </Card>
+  );
 }

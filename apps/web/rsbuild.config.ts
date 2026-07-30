@@ -1,11 +1,13 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginTailwindcss } from "@rsbuild/plugin-tailwindcss";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 const require = createRequire(import.meta.url);
 
 export default defineConfig({
-  plugins: [pluginReact()],
+  plugins: [pluginReact(), pluginTailwindcss()],
   source: {
     entry: {
       index: "./src/main.tsx",
@@ -23,6 +25,7 @@ export default defineConfig({
     rspack: {
       resolve: {
         alias: {
+          "@": path.resolve(import.meta.dirname, "src"),
           react: require.resolve("react"),
           "react-dom": require.resolve("react-dom"),
         },

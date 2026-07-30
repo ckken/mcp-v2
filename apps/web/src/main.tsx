@@ -1,9 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "./styles.css";
-import "./actions.css";
+import "./shadcn.css";
 import "./e2e-flow.css";
-import "./cursor-theme.css";
+import "./dashboard.css";
 import { App } from "./app";
 
 const container = document.getElementById("root");

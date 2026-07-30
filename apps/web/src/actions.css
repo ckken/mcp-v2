@@ -1,9 +1,0 @@
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-@media (max-width: 520px) {
-  .actions { align-items: stretch; }
-  .actions button { padding-inline: 12px; }
-}

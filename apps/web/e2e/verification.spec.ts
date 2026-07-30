@@ -1,4 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openDashboardSection(page: Page, name: string) {
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    await page.getByRole("button", { name: "切换侧边栏" }).click();
+  }
+
+  await page.getByRole("button", { name, exact: true }).click();
+}
 
 test("runs a real v2-first verification and renders its evidence", async ({ page }) => {
   await page.goto("/");
@@ -39,7 +47,7 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
 
 test("runs and renders the complete live E2E matrix", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "全链路验收" }).click();
+  await openDashboardSection(page, "全链路验收");
   await expect(page.getByRole("heading", { name: "全链路 E2E 验收" })).toBeVisible();
   await expect(page.getByLabel(/条用例动效矩阵/)).toBeVisible();
   await expect(page.getByTestId("scenario-flow-canvas")).toBeVisible();
@@ -93,7 +101,7 @@ test("runs and renders the complete live E2E matrix", async ({ page }) => {
 
 test("renders every dynamic MCP App view and remains usable at 390px", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "MCP 应用" }).click();
+  await openDashboardSection(page, "MCP 应用");
   await expect(page.getByText("工具结果已送达 ui:// 资源")).toBeVisible();
   await expect(page.getByText("ui://mcp-v2/orders-dashboard.html")).toBeVisible();
   await expect(page.getByText("text/html;profile=mcp-app")).toBeVisible();
