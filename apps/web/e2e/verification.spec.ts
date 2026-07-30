@@ -10,7 +10,7 @@ async function openDashboardSection(page: Page, name: string) {
 
 test("runs a real v2-first verification and renders its evidence", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("服务可以访问")).toBeVisible();
+  await expect(page.getByRole("status", { name: "MCP 服务在线" })).toBeVisible();
 
   await page.getByRole("button", { name: "运行会话验证" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Codex 会话", exact: true })).toBeVisible();
@@ -45,54 +45,23 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
   });
 });
 
-test("runs and renders the complete live E2E matrix", async ({ page }) => {
+test("renders every navigation entry as an independent scene", async ({ page }) => {
   await page.goto("/");
-  await openDashboardSection(page, "全链路验收");
-  await expect(page.getByRole("heading", { name: "全链路 E2E 验收" })).toBeVisible();
-  await expect(page.getByLabel(/条用例动效矩阵/)).toBeVisible();
-  await expect(page.getByTestId("scenario-flow-canvas")).toBeVisible();
-  await expect(page.locator('img[src*="agent-skills-fox"]')).toHaveCount(0);
-  const runE2e = page.getByRole("button", { name: "运行全部 E2E" });
-  await runE2e.click();
-  await expect(runE2e).toBeDisabled();
-  await expect(page.getByTestId("case-playback")).toBeVisible();
-  await expect(page.locator('.case-pulse[data-state="running"]')).toBeVisible();
-  await expect(runE2e).toBeEnabled();
+  await expect(page.getByText("总览", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("全链路验收", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("MCP 服务在线");
 
-  const latestResponse = await page.request.get("/api/e2e/latest");
-  const latestPayload = await latestResponse.json() as {
-    report: {
-      total: number;
-      passed: number;
-      failed: number;
-      cases: Array<{ id: string; group: string; status: "passed" | "failed" }>;
-    };
-  };
-  const latest = latestPayload.report;
-  expect(latest.total).toBeGreaterThan(0);
-  expect(latest.cases).toHaveLength(latest.total);
-  await expect(page.getByRole("heading", {
-    name: latest.failed === 0 ? `${latest.total} 个用例全部通过` : `${latest.failed} 个用例失败`,
-  })).toBeVisible();
-  await expect(page.getByLabel("E2E summary")).toContainText(String(latest.total));
-  await expect(page.locator('.case-pulse[data-state="passed"]')).toHaveCount(latest.passed);
-  await expect(page.locator('.case-pulse[data-state="failed"]')).toHaveCount(latest.failed);
-  const sceneRail = page.getByRole("navigation", { name: "E2E 场景切换" });
-  for (const group of ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"]) {
-    await expect(sceneRail.getByRole("button", { name: new RegExp(group) })).toBeVisible();
-  }
-
-  for (const group of ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"]) {
-    const ids = latest.cases.filter((item) => item.group === group).map((item) => item.id);
-    expect(ids.length).toBeGreaterThan(0);
-    await sceneRail.getByRole("button", { name: new RegExp(group) }).click();
-    await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
-    for (const id of ids) {
-      const expected = latest.cases.find((item) => item.id === id)?.status;
-      expect(expected).toBeDefined();
-      await expect(page.getByTestId(`case-pulse-${id}`)).toHaveAttribute("data-state", expected!);
-      await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(new RegExp(expected!));
-    }
+  for (const [navigation, title, scene] of [
+    ["01 · 协议", "协议", "SCENE 01"],
+    ["02 · 工具", "工具", "SCENE 02"],
+    ["03 · 技能", "技能", "SCENE 03"],
+    ["04 · MCP 应用", "MCP 应用", "SCENE 04"],
+    ["05 · Codex 会话", "Codex 会话", "SCENE 05"],
+  ]) {
+    await openDashboardSection(page, navigation);
+    await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
+    await expect(page.locator(".scene-stage-index")).toHaveText(scene.slice(-2));
+    await expect(page.locator(".scene-stage")).toHaveAttribute("data-scene", scene.slice(-2));
   }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
@@ -101,7 +70,7 @@ test("runs and renders the complete live E2E matrix", async ({ page }) => {
 
 test("renders every dynamic MCP App view and remains usable at 390px", async ({ page }) => {
   await page.goto("/");
-  await openDashboardSection(page, "MCP 应用");
+  await openDashboardSection(page, "04 · MCP 应用");
   await expect(page.getByText("工具结果已送达 ui:// 资源")).toBeVisible();
   await expect(page.getByText("ui://mcp-v2/orders-dashboard.html")).toBeVisible();
   await expect(page.getByText("text/html;profile=mcp-app")).toBeVisible();

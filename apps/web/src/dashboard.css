@@ -23,6 +23,158 @@
   background: var(--chart-4);
 }
 
+.workspace-statusbar {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  min-height: 3.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  background: color-mix(in oklch, var(--background) 92%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+
+.statusbar-service {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--foreground);
+  font-size: 0.78rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.statusbar-scene {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding-right: 0.25rem;
+  white-space: nowrap;
+}
+
+.statusbar-scene span {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.08em;
+}
+
+.statusbar-scene strong {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.scene-stage {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.scene-stage::before {
+  position: absolute;
+  z-index: -1;
+  top: -1.5rem;
+  right: 0;
+  left: 0;
+  height: 15rem;
+  content: "";
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--border) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in oklch, var(--border) 70%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.36), transparent);
+}
+
+.scene-stage-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.1rem;
+  min-height: 9.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem clamp(1.25rem, 3vw, 2.25rem);
+  background:
+    radial-gradient(circle at 88% 22%, color-mix(in oklch, var(--primary) 10%, transparent), transparent 34%),
+    var(--card);
+}
+
+.scene-stage-index {
+  color: color-mix(in oklch, var(--foreground) 14%, transparent);
+  font-size: clamp(3rem, 8vw, 5.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.09em;
+}
+
+.scene-stage-header p {
+  margin: 0 0 0.25rem;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.scene-stage-header h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 650;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.scene-stage-header div > span {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.scene-stage-content {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .workspace-statusbar {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .statusbar-service span:last-child,
+  .statusbar-scene span {
+    display: none;
+  }
+
+  .scene-stage-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 8rem;
+    gap: 0.8rem;
+    padding: 1.1rem;
+  }
+
+  .scene-stage-header > [data-slot="badge"] {
+    display: none;
+  }
+
+  .scene-stage-index {
+    font-size: 3.2rem;
+  }
+}
+
 .e2e-experience {
   --blue: var(--primary);
   --green: var(--chart-2);

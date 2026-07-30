@@ -46,20 +46,17 @@ tests/e2e         真实浏览器验收
 
 ## 可视化验证中心
 
-前端必须由真实请求驱动，不允许硬编码通过状态。主要页面：
+前端必须由真实请求驱动，不允许硬编码通过状态。界面直接进入五个独立场景：
 
-- 总览：服务状态、v2-first、功能矩阵、最近验收。
-- Protocol：discover、capability、headers、modern JSON、legacy SSE framing、
-  stateless fallback。
-- Tools：Schema 表单、调用结果、错误和耗时。
-- Resources / Prompts：列表、读取、缓存、模板和参数。
-- Multi-round：`inputRequired` 确认、拒绝和重入。
-- Skills：发现、manifest、workflow、执行和审计。
-- MCP Apps：iframe、CSP、bridge、Tool 代理和结果回流。
-- Tasks：创建、轮询、输入、取消和恢复。
-- Auth：metadata、Bearer、scope、401 和 403。
-- Error Lab：协议、Schema、Header、URI、权限和超时错误。
-- Codex Session：真实 Codex 会话步骤、请求证据和 PASS/FAIL。
+| 场景 | 内容 |
+| --- | --- |
+| 01 协议 | discover、capability、modern JSON、legacy SSE framing |
+| 02 工具 | 13 个 Tool 的发现状态与职责 |
+| 03 技能 | Skill manifest、输入与执行入口 |
+| 04 MCP 应用 | iframe、bridge、Tool 代理和结果回流 |
+| 05 Codex 会话 | 真实客户端步骤、请求证据和 PASS/FAIL |
+
+顶部状态栏统一显示服务状态、协议版本与当前场景；不再设置重复的总览和全链路入口。
 
 ## Codex 会话验收协议
 

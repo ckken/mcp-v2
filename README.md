@@ -33,16 +33,11 @@ Tasks 也采用 `tasks.*` Tool 模型，因为当前 `2026-07-28` SDK 已不提�
 原生 Tasks 运行时。Auth 在设置 `MCP_AUTH_TOKEN` 后启用；未设置时保留本地
 免鉴权开发模式。
 
-## Case Pulse 可视化验收
+## 场景化验证中心
 
-<p align="center">
-  <img src="./artifacts/e2e-case-pulse.png" alt="MCP E2E Case Pulse：二十五个用例逐条动效呈现" width="100%" />
-</p>
-
-`E2E Lab` 使用 React Flow 把 Protocol、Discovery、Tools、Skills、
-Verification 和 MCP Apps 组织成六个场景。真实报告返回后，25 个用例会
-逐条经过 queued、running 和 passed/failed 状态；点击任一场景可以查看该组
-用例的耗时和脱敏证据。
+验证中心不再提供“总览”和“全链路验收”入口，而是直接进入五个独立现场：
+协议、工具、技能、MCP 应用和 Codex 会话。顶部状态栏持续显示服务状态、
+协议版本和当前场景编号；自动化 25 个用例仍由服务端门禁执行。
 
 `orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
 Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的

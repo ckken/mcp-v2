@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ActivityIcon,
   BotIcon,
   BracesIcon,
-  CircleCheckIcon,
-  FlaskConicalIcon,
-  LayoutDashboardIcon,
   PanelsTopLeftIcon,
   PlayIcon,
-  RadioIcon,
   RefreshCwIcon,
   ServerIcon,
   SparklesIcon,
@@ -31,7 +27,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -54,21 +49,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { E2eFlowLab } from "./e2e-flow";
 import { asRuns, type VerificationRunView } from "./runs";
 
 type Health = "online" | "unavailable" | "checking";
-type Page = "Overview" | "E2E Lab" | "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
+type Page = "Protocol" | "Tools" | "Skills" | "MCP Apps" | "Codex Session";
 type Run = VerificationRunView;
 
-const pages: Array<{ id: Page; label: string; icon: LucideIcon }> = [
-  { id: "Overview", label: "总览", icon: LayoutDashboardIcon },
-  { id: "E2E Lab", label: "全链路验收", icon: FlaskConicalIcon },
-  { id: "Protocol", label: "协议", icon: BracesIcon },
-  { id: "Tools", label: "工具", icon: WrenchIcon },
-  { id: "Skills", label: "技能", icon: SparklesIcon },
-  { id: "MCP Apps", label: "MCP 应用", icon: PanelsTopLeftIcon },
-  { id: "Codex Session", label: "Codex 会话", icon: BotIcon },
+const pages: Array<{
+  id: Page;
+  label: string;
+  scene: string;
+  signal: string;
+  description: string;
+  icon: LucideIcon;
+}> = [
+  { id: "Protocol", label: "协议", scene: "01", signal: "协商现场", description: "观察 modern、legacy 与响应封装的真实边界。", icon: BracesIcon },
+  { id: "Tools", label: "工具", scene: "02", signal: "调用现场", description: "逐项确认 13 个 Tool 的发现状态与职责。", icon: WrenchIcon },
+  { id: "Skills", label: "技能", scene: "03", signal: "编排现场", description: "查看应用级 Skill 的发现、输入与执行入口。", icon: SparklesIcon },
+  { id: "MCP Apps", label: "MCP 应用", scene: "04", signal: "交互现场", description: "从 Tool 元数据进入 ui:// 资源并观察宿主通信。", icon: PanelsTopLeftIcon },
+  { id: "Codex Session", label: "Codex 会话", scene: "05", signal: "验证现场", description: "回看真实 Client 调用、服务端证据与最终状态。", icon: BotIcon },
 ];
 
 const protocolRows = [
@@ -78,11 +77,15 @@ const protocolRows = [
   ["legacy fallback", "2025 版本无状态 POST 使用 SSE 帧", "已启用"],
   ["SSE endpoint", "不提供独立的旧版 SSE 端点", "已关闭"],
 ];
-const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
+const demoTools = [
+  "system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run",
+  "verification.start", "verification.status", "verification.finish",
+  "tasks.create", "tasks.status", "tasks.list", "tasks.cancel", "tasks.result",
+];
 const demoSkills = ["skills.discover", "skills.run"];
 
-function pageLabel(page: Page) {
-  return pages.find((item) => item.id === page)?.label ?? page;
+function pageMeta(page: Page) {
+  return pages.find((item) => item.id === page) ?? pages[0]!;
 }
 
 function DashboardPageButton({
@@ -116,7 +119,7 @@ function DashboardPageButton({
 }
 
 export function App() {
-  const [page, setPage] = useState<Page>("Overview");
+  const [page, setPage] = useState<Page>("Protocol");
   const [health, setHealth] = useState<Health>("checking");
   const [runs, setRuns] = useState<Run[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -161,8 +164,7 @@ export function App() {
   };
 
   useEffect(() => { void refresh(); }, []);
-  const passed = useMemo(() => runs.filter((run) => run.status === "passed").length, [runs]);
-  const active = useMemo(() => runs.filter((run) => run.status === "running").length, [runs]);
+  const currentPage = pageMeta(page);
 
   return (
     <TooltipProvider>
@@ -171,13 +173,13 @@ export function App() {
           <SidebarHeader>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton size="lg" tooltip="MCP v2 验证中心" onClick={() => setPage("Overview")}>
+                <SidebarMenuButton size="lg" tooltip="MCP v2 验证中心" onClick={() => setPage("Protocol")}>
                   <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <ActivityIcon />
                   </span>
                   <span className="grid min-w-0 flex-1 text-left">
                     <strong className="truncate text-sm">MCP v2 验证中心</strong>
-                    <span className="truncate text-xs text-muted-foreground">全功能实验链路</span>
+                    <span className="truncate text-xs text-muted-foreground">五个验证场景</span>
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -188,11 +190,11 @@ export function App() {
               <SidebarGroupLabel>验证页面</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {pages.map(({ id, label, icon: Icon }) => (
+                  {pages.map(({ id, label, scene, icon: Icon }) => (
                     <SidebarMenuItem key={id}>
                       <DashboardPageButton
                         id={id}
-                        label={label}
+                        label={`${scene} · ${label}`}
                         icon={Icon}
                         active={page === id}
                         onSelect={setPage}
@@ -203,24 +205,25 @@ export function App() {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarFooter>
-            <div className="flex items-center gap-2 rounded-lg border bg-background p-2 text-xs group-data-[collapsible=icon]:justify-center">
-              <span className={`status-dot ${health}`} />
-              <span className="truncate group-data-[collapsible=icon]:hidden">
-                {health === "online" ? "服务已连接" : health === "checking" ? "正在连接" : "服务不可用"}
-              </span>
-            </div>
-          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
 
         <SidebarInset>
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+          <header className="workspace-statusbar">
             <SidebarTrigger />
             <Separator orientation="vertical" className="h-4" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">MCP v2 可视化验证</p>
-              <h1 className="truncate text-base font-medium">{pageLabel(page)}</h1>
+            <div
+              className="statusbar-service"
+              role="status"
+              aria-label={health === "online" ? "MCP 服务在线" : health === "checking" ? "正在连接 MCP" : "MCP 服务不可用"}
+            >
+              <span className={`status-dot ${health}`} />
+              <span>{health === "online" ? "MCP 服务在线" : health === "checking" ? "正在连接 MCP" : "MCP 服务不可用"}</span>
+            </div>
+            <Badge variant="outline" className="hidden sm:inline-flex">2026-07-28</Badge>
+            <div className="statusbar-scene">
+              <span>SCENE {currentPage.scene}</span>
+              <strong>{currentPage.label}</strong>
             </div>
             <div className="flex items-center gap-2">
               <Button aria-label="刷新数据" variant="outline" size="sm" disabled={refreshing} onClick={() => void refresh()}>
@@ -248,13 +251,13 @@ export function App() {
                 <AlertDescription>{runError}</AlertDescription>
               </Alert>
             )}
-            {page === "Overview" && <Overview health={health} runs={runs} passed={passed} active={active} />}
-            {page === "E2E Lab" && <E2eFlowLab />}
-            {page === "Protocol" && <Protocol />}
-            {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" icon={WrenchIcon} />}
-            {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" icon={SparklesIcon} />}
-            {page === "MCP Apps" && <McpApps />}
-            {page === "Codex Session" && <Session runs={runs} />}
+            <SceneStage page={currentPage}>
+              {page === "Protocol" && <Protocol />}
+              {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" icon={WrenchIcon} />}
+              {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" icon={SparklesIcon} />}
+              {page === "MCP Apps" && <McpApps />}
+              {page === "Codex Session" && <Session runs={runs} />}
+            </SceneStage>
           </div>
         </SidebarInset>
       </SidebarProvider>
@@ -262,85 +265,26 @@ export function App() {
   );
 }
 
-function Overview({ health, runs, passed, active }: { health: Health; runs: Run[]; passed: number; active: number }) {
+function SceneStage({
+  page,
+  children,
+}: {
+  page: (typeof pages)[number];
+  children: ReactNode;
+}) {
   return (
-    <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label="验证记录" value={String(runs.length)} detail="服务端累计执行" icon={ActivityIcon} />
-        <Metric label="已通过" value={String(passed)} detail="完成真实证据检查" icon={CircleCheckIcon} />
-        <Metric label="运行中" value={String(active)} detail="当前活动会话" icon={RadioIcon} />
-        <Metric label="传输状态" value={health === "online" ? "在线" : "—"} detail="Streamable HTTP" icon={ServerIcon} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.7fr)]">
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>最近验证记录</CardTitle>
-            <CardDescription>只显示最近 8 次服务端执行，完整轨迹可在 Codex 会话中查看。</CardDescription>
-            <CardAction><Badge variant="outline">实时 API</Badge></CardAction>
-          </CardHeader>
-          <CardContent>
-            {runs.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>状态</TableHead>
-                    <TableHead>名称</TableHead>
-                    <TableHead className="hidden md:table-cell">运行 ID</TableHead>
-                    <TableHead className="text-right">完成时间</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {runs.slice(0, 8).map((run) => (
-                    <TableRow key={run.id}>
-                      <TableCell><RunBadge status={run.status} /></TableCell>
-                      <TableCell className="font-medium">{run.name}</TableCell>
-                      <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">{run.id}</TableCell>
-                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{run.finishedAt ?? "执行中"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : <Empty text="服务返回执行记录后会显示在这里。" />}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>服务状态</CardTitle>
-            <CardDescription>页面只呈现当前服务返回的数据。</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 rounded-lg border p-3">
-              <span className={`status-dot ${health}`} />
-              <div>
-                <p className="font-medium">{health === "online" ? "服务可以访问" : health === "checking" ? "正在联系服务" : "服务暂时不可用"}</p>
-                <p className="font-mono text-xs text-muted-foreground">{health === "online" ? "/api/status 已响应" : "还没有收到成功响应"}</p>
-              </div>
-            </div>
-            <div className="grid gap-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">协议版本</span><code>2026-07-28</code></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">传输方式</span><span>Streamable HTTP</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">独立 SSE</span><Badge variant="secondary">关闭</Badge></div>
-            </div>
-          </CardContent>
-          <CardFooter className="text-xs text-muted-foreground">结果来自当前进程，不使用静态通过状态。</CardFooter>
-        </Card>
-      </div>
-    </>
-  );
-}
-
-function Metric({ label, value, detail, icon: Icon }: { label: string; value: string; detail: string; icon: LucideIcon }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums">{value}</CardTitle>
-        <CardAction><Icon className="text-muted-foreground" /></CardAction>
-      </CardHeader>
-      <CardFooter className="text-xs text-muted-foreground">{detail}</CardFooter>
-    </Card>
+    <section className="scene-stage" data-scene={page.scene}>
+      <header className="scene-stage-header">
+        <span className="scene-stage-index">{page.scene}</span>
+        <div>
+          <p>{page.signal}</p>
+          <h1>{page.label}</h1>
+          <span>{page.description}</span>
+        </div>
+        <Badge variant="outline">LIVE SCENE</Badge>
+      </header>
+      <div className="scene-stage-content">{children}</div>
+    </section>
   );
 }
 
