@@ -30,4 +30,3 @@ not be confused with a standalone SSE transport.
 
 See `docs/e2e-acceptance-plan.md`, `docs/verification-report.md`, and the HTTP
 acceptance runner under `services/mcp`.
-

@@ -30,4 +30,3 @@ audit, and multi-instance policy.
 
 See `services/mcp/src/index.ts`, HTTP acceptance, and the Auth section of
 `docs/verification-report.md`.
-

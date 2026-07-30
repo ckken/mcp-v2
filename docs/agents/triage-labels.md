@@ -31,4 +31,3 @@ Before applying `ready-for-agent`, confirm the target behavior, scope,
 non-goals, acceptance, dependencies, relevant baseline, and write authority.
 Before applying `ready-for-human`, record implementation and verification
 evidence plus the exact human decision still required.
-

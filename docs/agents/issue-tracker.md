@@ -35,4 +35,3 @@ authorize unrelated external workflow changes.
 Status labels describe workflow state. Type labels such as `bug`,
 `enhancement`, and `documentation` describe the nature of the work and may be
 used alongside exactly one active workflow status.
-

@@ -51,4 +51,3 @@ acceptance gates.
 | `docs/e2e-acceptance-plan.md` | Automated acceptance scope |
 | `docs/verification-report.md` | Current verified support and remaining production gaps |
 | `docs/agents/` | Agent workflow, issue ownership, and status vocabulary |
-

@@ -31,4 +31,3 @@ implementation, review, or triage work.
 This is a multi-workspace repository but currently one product context. Do not
 create `CONTEXT-MAP.md` or package-local context files unless ownership,
 terminology, release cadence, or data boundaries genuinely diverge.
-

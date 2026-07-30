@@ -34,4 +34,3 @@ ownership, expiry, recovery, and multi-instance coordination.
 
 See the Task domain tests, HTTP acceptance, E2E runner, and capability matrix
 in `docs/verification-report.md`.
-

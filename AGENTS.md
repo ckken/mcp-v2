@@ -18,4 +18,3 @@
   endpoint alone is not sufficient user-facing acceptance.
 - Do not expose tokens, private configuration, raw conversations, or private
   remote URLs in logs, documentation, issues, or review output.
-
