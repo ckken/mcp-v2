@@ -46,8 +46,8 @@
 | 场景切换 | 每个场景的步骤 ID、状态、耗时和脱敏证据可核对 |
 | 操作位置 | 顶部无全局触发；刷新和会话验证只出现在 Scene 05 |
 | 桌面 | Chromium 完整通过 |
-| 移动端 | 390px 无横向溢出，交互完整 |
-| MCP App | Overview → Orders → paid → Status → fulfilled |
+| 移动端 | 单主 Flow 在 390px 纵向布局、无横向溢出 |
+| MCP App | 主 Flow 展示服务端路线证据；Widget 构建与 bridge 契约由独立门禁覆盖 |
 
 ## 门禁
 

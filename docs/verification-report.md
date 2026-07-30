@@ -11,7 +11,7 @@
 | Modern MCP | 通过 | 当前用例 100% | pinned/auto 协商 `2026-07-28`，成功响应为 JSON |
 | v2 新特征 | 通过 | 本项目选定范围 5/5 | cache hints、JSON Schema 2020-12/outputSchema、Trace Context、`input_required`、Extensions |
 | Legacy Codex 兼容 | 通过 | 当前用例 100% | `2025-06-18` stateless fallback，结果使用 SSE 响应帧 |
-| Web Host MCP App | 通过 | 当前用例 100% | 桌面与 390px、三视图、动态筛选、反向 Tool 调用 |
+| Web 主 Flow | 通过 | desktop + 390px，10/10 | 单画布、六路线、老版概念切换、动态 Tool 路由 |
 | 独立场景闭环 | 通过 | 6/6（100%） | Scene 00–05 入口动态发现，参数改变实际路线，报告与运行状态隔离 |
 | Auth 基线 | 通过 | Demo/内网基线 | Bearer Token、scope、401、403、授权调用；不等同完整 OAuth/OIDC |
 | Codex Desktop 内嵌 UI | 未验证 | 不计入通过 | Tool 可调用，但尚无可确认的 widget 渲染证据 |
@@ -32,7 +32,7 @@
 | Resources | `ui://mcp-v2/orders-dashboard.html` | 原生 list/read | URI、MIME、单文件内容通过 |
 | Prompts | `order-review`、`verification-checklist` | 原生 list/get | modern 与 legacy 均 2/2；参数渲染通过 |
 | Skills | 2 个应用级 Skill | `skills.discover/run` | 发现、两类摘要、清单、错误路径通过 |
-| Apps | sandbox iframe + JSON-RPC bridge | Tool `_meta` 关联 `ui://` | Web Host 完整链路通过 |
+| Apps | 单文件 Widget + JSON-RPC bridge | Tool `_meta` 关联 `ui://` | 构建与 bridge 契约通过；精简后的主 Flow 不嵌入 iframe |
 | Tasks | 5 个应用级 Task Tool | create/status/list/cancel/result | 轮询、完成、取消、结果、未知 ID 通过 |
 | Auth | 可配置 Bearer Token + scope | `MCP_AUTH_TOKEN` 或注入配置 | 401、403、合法 Client 调用通过 |
 | Verification | start/status/finish | 服务端证据链判定 | 确认通过与拒绝失败路径均通过 |
@@ -130,7 +130,7 @@
 | SDK legacy Client | 通过 | 通过 | 不适用 | 通过 |
 | Codex CLI `0.145.0` | 通过 | 本轮未复测 | CLI 不承诺内嵌 UI | Tool 链路通过 |
 | 当前 Codex Desktop task | 已有调用证据 | 本轮未复测 | 未观察到 widget | Tool 与 UI 分开判定 |
-| 仓库 Web Host | 通过 | 不适用 | 通过 | 完整 App 链路通过 |
+| 仓库 Web 主 Flow | 通过 | 不适用 | 未嵌入 | 服务端 App 路线证据通过；实际 Widget 由独立构建覆盖 |
 
 ## 8. 仍未完成
 

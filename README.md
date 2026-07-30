@@ -37,15 +37,15 @@ Tasks 也采用 `tasks.*` Tool 模型，因为当前 `2026-07-28` SDK 已不提�
 
 ## 场景化验证中心
 
-验证中心不再提供“总览”和“全链路验收”入口，而是直接进入六个独立闭环：
-闭环实验、协议、工具、技能、MCP 应用和 Codex 会话。每个场景都有自己的
-React Flow 动画、运行按钮、服务端发现生成的动态入口和回到入口的闭环；协议
-模式、Tool、Skill、App 参数和人工确认都会改变本场景的实际运行路径。运行
-某一场景不会改写其他场景。顶部状态栏只显示服务状态、协议版本和当前场景编号，
-原顶部的“刷新数据 / 运行会话验证”只在 Scene 05 内出现。
+验证中心不再用六套特征卡和证据卡重复解释 v2，而是直接进入一个 React Flow
+主闭环：动态发现 → 协议 → 工具 → 技能 → MCP 应用 → Codex 会话 → Verdict
+回流。左侧六个入口只定位主 Flow 节点，不切换页面；“运行完整闭环”按顺序
+调用六条真实服务端路线，节点状态和底部证据条只投影服务端报告。老版本切换
+只改变 Flow 结构并明确标记为概念对照，不发送请求。
 
-Scene 00 只检查服务状态、场景注册、能力目录与能力矩阵，不触发 01–05。
-服务端的 25 个自动化用例仍作为独立门禁执行，不再作为全局 UI 入口。
+服务端仍保留六个相互隔离的动态入口和 latest report 槽位；主 Flow 只是前端
+编排，不会把多个场景合并成一份伪造结论。服务端的 25 个自动化用例继续作为
+独立门禁执行。
 
 `orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
 Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
@@ -59,8 +59,9 @@ Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
 ```
 
 这组参数会返回一条演示订单 `ord_demo_1001`。Codex CLI 能拿到结果；
-当前 Codex Desktop 还没有把 MCP App 真正渲染到会话里。仓库里的 Web Host
-已经跑通完整界面链路，但两者不能混为一谈。
+当前 Codex Desktop 还没有把 MCP App 真正渲染到会话里。主 Flow 验证
+Tool、`ui://` Resource、bridge 与 render 的服务端路线证据；MCP App 自身仍
+单独构建和测试，但当前精简后的验证中心不再嵌入 iframe Widget。
 
 ## 运行
 
@@ -96,7 +97,7 @@ bun run acceptance
 
 ```text
 apps/mcp-app   shadcn/ui MCP App，构建为单文件 HTML
-apps/web       六场景 React Flow 闭环验证中心与 MCP App Host
+apps/web       单主场景 React Flow 验证中心
 services/mcp   Bun MCP Server、Tool、Resource 和验收脚本
 packages/shared
                共享契约与测试夹具

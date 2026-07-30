@@ -11,7 +11,7 @@ implementation, review, or triage work.
 | --- | --- | --- |
 | `services/mcp` | Protocol runtime, compatibility, Auth, application Tasks, and evidence ownership | `bun run acceptance:http` and `bun run acceptance:codex` |
 | `apps/mcp-app` | `ui://` resource, bridge protocol, bounded demo order presentation | MCP App build and browser host acceptance |
-| `apps/web` | Scene navigation, live API projection, desktop and 390px behavior | `bun run acceptance:browser` |
+| `apps/web` | Master Flow node navigation, six-route live API projection, desktop and 390px behavior | `bun run acceptance:browser` |
 | `packages/shared` | Runtime contracts shared across workspaces | Bun contract tests and typecheck |
 | Cross-module delivery | ADRs, compatibility matrix, and complete user path | `bun run acceptance` |
 
