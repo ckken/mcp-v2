@@ -39,8 +39,21 @@ verification.finish
 
 ## 可视化验收
 
-`E2E Lab` 页面显示本次 run id、协议版本、通过数、失败数、每个用例的耗时和
-脱敏证据。桌面与 390px Playwright 都要执行页面上的“运行全部 E2E”按钮。
+`E2E Lab` 使用 React Flow 将六个分组组织为 Kenvo 狐狸的闭环巡检地图：
+
+```text
+Fox Runner → Protocol → Discovery → Tools
+     ↑                                  ↓
+MCP Apps ← Verification ← Skills ←─────┘
+```
+
+运行期间只显示当前巡检场景，不提前显示通过；收到服务端完整报告后才用真实状态
+点亮节点和边。场景轨道可切换每组用例，并显示 run id、协议版本、通过数、
+失败数、耗时和脱敏证据。
+
+狐狸视觉资产来自 `ckken/agent-skills` 仓库的官方封面。桌面与 390px
+Playwright 都要执行页面上的“运行全部 E2E”按钮，并验证 React Flow 画布、
+狐狸资产、六个场景切换和代表性证据。
 
 MCP App 另走 sandbox iframe 验收：
 

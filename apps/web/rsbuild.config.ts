@@ -11,7 +11,7 @@ export default defineConfig({
       index: "./src/main.tsx",
     },
   },
-  html: { title: "MCP Visual Verification Center" },
+  html: { title: "MCP Fox Trail — E2E Lab" },
   server: {
     host: "0.0.0.0",
     proxy: {

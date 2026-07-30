@@ -35,10 +35,15 @@
 ### E2E Lab
 
 - `POST /api/e2e/run` 真实建立 modern `2026-07-28` 与 legacy Client。
+- 页面使用 `@xyflow/react` 将六个分组渲染为可缩放、可平移、可选择的
+  Kenvo Fox Trail；官方狐狸资产来自 `ckken/agent-skills`。
+- 运行时狐狸依次巡检六个场景；前端等待真实报告，巡检动效不会提前制造
+  passed 状态。
 - 20 个用例覆盖当前注册的 8 个 Tool、2 个应用层 Skill、验证成功/拒绝路径、
   Dashboard 三种视图和 MCP App Resource 契约。
 - 最新报告可从 `GET /api/e2e/latest` 读取；页面不会补造成功结果。
-- 桌面与 390px 浏览器均执行“运行全部 E2E”，结果为 `20/20`。
+- 桌面与 390px 浏览器均执行“运行全部 E2E”，验证 React Flow 画布、
+  狐狸资产、场景切换和证据结果，最终为 `20/20`。
 - MCP App sandbox 依次通过 `Overview → Orders → Status`，并验证
   `paid`、`fulfilled` 两次参数切换。
 

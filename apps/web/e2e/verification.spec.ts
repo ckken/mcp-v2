@@ -24,26 +24,33 @@ test("runs and renders the complete 20-case E2E matrix", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "E2E Lab" }).click();
   await expect(page.getByRole("heading", { name: "全链路 E2E 验收" })).toBeVisible();
-  await page.getByRole("button", { name: "运行全部 E2E" }).click();
+  await expect(page.getByAltText("Kenvo Agent Skills 狐狸 IP")).toBeVisible();
+  await expect(page.getByTestId("fox-trail-canvas")).toBeVisible();
+  const runE2e = page.getByRole("button", { name: "运行全部 E2E" });
+  await runE2e.click();
+  await expect(runE2e).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "狐狸正在穿越六个场景" })).toBeVisible();
+  await expect(runE2e).toBeEnabled();
 
   await expect(page.getByRole("heading", { name: "20 个用例全部通过" })).toBeVisible();
-  await expect(page.getByLabel("E2E summary")).toContainText("20/ 20");
+  await expect(page.getByLabel("E2E summary")).toContainText("20");
+  const sceneRail = page.getByRole("navigation", { name: "E2E 场景切换" });
   for (const group of ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"]) {
-    await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
+    await expect(sceneRail.getByRole("button", { name: new RegExp(group) })).toBeVisible();
   }
-  for (const id of [
-    "protocol.modern",
-    "protocol.legacy",
-    "discovery.tools",
-    "tool.dashboard-status",
-    "skills.order-summary",
-    "skills.checklist",
-    "skills.unknown",
-    "verification.success",
-    "verification.rejected",
-    "mcp-app.resource",
-  ]) {
-    await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(/passed/);
+
+  const scenes: Array<[string, string[]]> = [
+    ["Protocol", ["protocol.modern", "protocol.legacy"]],
+    ["Discovery", ["discovery.tools"]],
+    ["Tools", ["tool.dashboard-status"]],
+    ["Skills", ["skills.order-summary", "skills.checklist", "skills.unknown"]],
+    ["Verification", ["verification.success", "verification.rejected"]],
+    ["MCP Apps", ["mcp-app.resource"]],
+  ];
+  for (const [group, ids] of scenes) {
+    await sceneRail.getByRole("button", { name: new RegExp(group) }).click();
+    await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
+    for (const id of ids) await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(/passed/);
   }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
