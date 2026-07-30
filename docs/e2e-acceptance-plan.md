@@ -18,7 +18,7 @@
 
 | 分组 | 数量 | 覆盖范围 |
 | --- | ---: | --- |
-| Protocol | 3 | JSON HTTP、modern 握手、legacy fallback |
+| Protocol | 3 | JSON HTTP、modern 自包含请求、legacy fallback |
 | Discovery | 4 | 13 个 Tool、MCP App Resource、2 个 Prompt、Prompt 渲染 |
 | Tools | 9 | health、订单、Dashboard 三视图、Task 生命周期和错误路径 |
 | Skills | 5 | 发现、订单摘要、验证清单、未知 Skill 拒绝 |

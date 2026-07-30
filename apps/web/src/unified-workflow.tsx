@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   scenarioEntryDefinitionSchema,
   type ScenarioEntryDefinition,
+  type ScenarioEntryField,
   type ScenarioEntryRequest,
+  type ScenarioEntryValue,
 } from "@mcp-v2/shared";
 import {
   Background,
@@ -19,18 +21,22 @@ import {
 import {
   CheckIcon,
   CircleIcon,
+  GitBranchIcon,
   PlayIcon,
   RefreshCwIcon,
   XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { asScenarioReport, type ScenarioId, type ScenarioReportView } from "./scenario-report";
-import { SCENARIOS, type ScenarioDefinition } from "./scenarios";
+import { SCENARIOS, type ScenarioDefinition, type ScenarioStepDefinition } from "./scenarios";
 
 type FlowView = "old" | "v2";
-type FlowState = "idle" | "running" | "passed" | "failed";
+type FlowState = "idle" | "running" | "passed" | "failed" | "skipped";
+type EntryMap = Partial<Record<ScenarioId, ScenarioEntryDefinition>>;
+type RequestMap = Partial<Record<ScenarioId, ScenarioEntryRequest>>;
+type ReportMap = Partial<Record<ScenarioId, ScenarioReportView | null>>;
 
-type MasterNodeData = {
+type RouteNodeData = {
   index: string;
   eyebrow: string;
   label: string;
@@ -42,9 +48,8 @@ type MasterNodeData = {
   tags: readonly string[];
 };
 
-type MasterNode = Node<MasterNodeData, "master">;
-type EntryMap = Partial<Record<ScenarioId, ScenarioEntryDefinition>>;
-type ReportMap = Partial<Record<ScenarioId, ScenarioReportView | null>>;
+type RouteNode = Node<RouteNodeData, "route">;
+type RenderedStep = Pick<ScenarioStepDefinition, "id" | "label" | "copy">;
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
@@ -54,7 +59,6 @@ function initializeEntryRequest(entry: ScenarioEntryDefinition): ScenarioEntryRe
     protocolMode: "auto",
     parameters: {},
   };
-
   for (const field of entry.fields) {
     if (field.defaultValue === undefined) continue;
     if (field.binding === "protocolMode") {
@@ -65,7 +69,6 @@ function initializeEntryRequest(entry: ScenarioEntryDefinition): ScenarioEntryRe
       request.parameters[field.key] = field.defaultValue;
     }
   }
-
   return request;
 }
 
@@ -79,7 +82,6 @@ function useCompactFlow() {
   const [compact, setCompact] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches,
   );
-
   useEffect(() => {
     const media = window.matchMedia("(max-width: 640px)");
     const update = () => setCompact(media.matches);
@@ -87,25 +89,24 @@ function useCompactFlow() {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-
   return compact;
 }
 
-function v2Position(index: number, count: number, compact: boolean) {
-  if (compact) return { x: 42, y: 42 + index * 126 };
-  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count;
+function routePosition(index: number, count: number, compact: boolean) {
+  if (compact) return { x: 44, y: 34 + index * 126 };
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
   return {
     x: 425 + Math.cos(angle) * 335,
-    y: 248 + Math.sin(angle) * 205,
+    y: 250 + Math.sin(angle) * 205,
   };
 }
 
 function oldPosition(index: number, compact: boolean) {
-  if (compact) return { x: 42, y: 56 + index * 164 };
+  if (compact) return { x: 44, y: 54 + index * 164 };
   return { x: 54 + index * 292, y: index % 2 === 0 ? 192 : 278 };
 }
 
-function MasterNodeCard({ data }: NodeProps<MasterNode>) {
+function RouteNodeCard({ data }: NodeProps<RouteNode>) {
   return (
     <article
       className={[
@@ -132,6 +133,7 @@ function MasterNodeCard({ data }: NodeProps<MasterNode>) {
         {data.state === "passed" && <CheckIcon />}
         {data.state === "failed" && <XIcon />}
         {data.state === "running" && <RefreshCwIcon />}
+        {data.state === "skipped" && <span>—</span>}
         {data.state === "idle" && <CircleIcon />}
       </span>
       <Handle type="source" position={data.compact ? Position.Bottom : Position.Right} />
@@ -139,7 +141,7 @@ function MasterNodeCard({ data }: NodeProps<MasterNode>) {
   );
 }
 
-const nodeTypes = { master: MasterNodeCard };
+const nodeTypes = { route: RouteNodeCard };
 
 async function readEntry(definition: ScenarioDefinition) {
   const response = await fetch(`/api/scenarios/${definition.id}/entry`, {
@@ -163,6 +165,85 @@ async function readLatest(definition: ScenarioDefinition) {
   return report;
 }
 
+function fieldValue(request: ScenarioEntryRequest, field: ScenarioEntryField): ScenarioEntryValue {
+  if (field.binding === "protocolMode") return request.protocolMode;
+  if (field.binding === "selection") return request.selection ?? field.defaultValue ?? "";
+  return request.parameters[field.key] ?? field.defaultValue ?? "";
+}
+
+function updateField(
+  request: ScenarioEntryRequest,
+  field: ScenarioEntryField,
+  value: ScenarioEntryValue,
+): ScenarioEntryRequest {
+  if (field.binding === "protocolMode") {
+    return { ...request, protocolMode: String(value) as ScenarioEntryRequest["protocolMode"] };
+  }
+  if (field.binding === "selection") return { ...request, selection: String(value) };
+  return { ...request, parameters: { ...request.parameters, [field.key]: value } };
+}
+
+function plannedSteps(definition: ScenarioDefinition, request: ScenarioEntryRequest): RenderedStep[] {
+  return definition.steps
+    .filter((step) => {
+      if (definition.id === "protocol" && request.protocolMode === "modern") return step.id !== "protocol.legacy";
+      if (definition.id === "protocol" && request.protocolMode === "legacy") return step.id !== "protocol.modern";
+      if (definition.id === "tools" && request.parameters.taskLifecycle === false) return step.id !== "tools.tasks";
+      return true;
+    })
+    .map((step) => {
+      if (step.id === "tools.read") {
+        return { ...step, label: `调用 ${request.selection ?? "system.health"}` };
+      }
+      if (step.id === "skills.execute") {
+        return { ...step, label: `执行 ${request.selection ?? "order-summary"}` };
+      }
+      if (step.id === "apps.render") {
+        return {
+          ...step,
+          label: `${String(request.parameters.view ?? "orders")} / ${String(request.parameters.status ?? "paid")}`,
+        };
+      }
+      if (step.id === "codex.confirm" && request.parameters.confirmation === false) {
+        return { ...step, label: "拒绝未确认完成", copy: "input_required 返回拒绝，服务端保持 failed" };
+      }
+      return step;
+    });
+}
+
+function conditionSummary(definition: ScenarioDefinition, request: ScenarioEntryRequest) {
+  const values = [`运行面=${definition.label}`];
+  if (definition.id === "protocol") values.push(`协议=${request.protocolMode}`);
+  if (request.selection !== undefined) values.push(`选择=${request.selection}`);
+  for (const [key, value] of Object.entries(request.parameters)) values.push(`${key}=${String(value)}`);
+  return values.join(" AND ");
+}
+
+function reportMatchesRequest(report: ScenarioReportView, request: ScenarioEntryRequest) {
+  return report.entry.protocolMode === request.protocolMode
+    && report.entry.selection === request.selection
+    && JSON.stringify(report.entry.parameters) === JSON.stringify(request.parameters);
+}
+
+function nodeState(
+  id: string,
+  report: ScenarioReportView | null | undefined,
+  activeStepIndex: number,
+  renderedSteps: readonly RenderedStep[],
+  running: boolean,
+): FlowState {
+  if (id === "discover" || id === "route") {
+    if (running && activeStepIndex < 0) return "running";
+    return report?.status ?? "idle";
+  }
+  const reportStep = report?.steps.find((step) => step.id === id);
+  if (reportStep !== undefined) return reportStep.status;
+  const index = renderedSteps.findIndex((step) => step.id === id);
+  if (running && index === activeStepIndex) return "running";
+  if (running && index < activeStepIndex) return "passed";
+  return "idle";
+}
+
 export function UnifiedWorkflow({
   focusedScenario,
   onFocus,
@@ -175,12 +256,25 @@ export function UnifiedWorkflow({
   const compact = useCompactFlow();
   const [flowView, setFlowView] = useState<FlowView>("v2");
   const [entries, setEntries] = useState<EntryMap>({});
+  const [requests, setRequests] = useState<RequestMap>({});
   const [reports, setReports] = useState<ReportMap>({});
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const [activeStepIndex, setActiveStepIndex] = useState(-1);
   const [closing, setClosing] = useState(false);
   const [running, setRunning] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedDefinition = SCENARIOS.find((item) => item.id === focusedScenario) ?? SCENARIOS[0]!;
+  const selectedEntry = entries[focusedScenario];
+  const selectedRequest = requests[focusedScenario]
+    ?? (selectedEntry === undefined ? undefined : initializeEntryRequest(selectedEntry));
+  const storedReport = reports[focusedScenario];
+  const selectedReport = storedReport !== null
+    && storedReport !== undefined
+    && selectedRequest !== undefined
+    && reportMatchesRequest(storedReport, selectedRequest)
+    ? storedReport
+    : null;
 
   const refresh = async () => {
     setRefreshing(true);
@@ -191,9 +285,14 @@ export function UnifiedWorkflow({
         return { id: definition.id, entry, report };
       }));
       setEntries(Object.fromEntries(discovered.map(({ id, entry }) => [id, entry])) as EntryMap);
+      setRequests((current) => {
+        const next = { ...current };
+        for (const { id, entry } of discovered) next[id] ??= initializeEntryRequest(entry);
+        return next;
+      });
       setReports(Object.fromEntries(discovered.map(({ id, report }) => [id, report])) as ReportMap);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "主流程发现失败");
+      setError(cause instanceof Error ? cause.message : "动态入口发现失败");
     } finally {
       setRefreshing(false);
     }
@@ -203,118 +302,188 @@ export function UnifiedWorkflow({
     void refresh();
   }, []);
 
-  const run = async () => {
-    setFlowView("v2");
-    setRunning(true);
+  useEffect(() => {
+    setActiveStepIndex(-1);
     setClosing(false);
     setError(null);
-    setReports({});
+  }, [focusedScenario]);
+
+  const run = async () => {
+    if (flowView === "old" || selectedEntry === undefined || selectedRequest === undefined) return;
+    setRunning(true);
+    setClosing(false);
+    setActiveStepIndex(-1);
+    setError(null);
+    setReports((current) => ({ ...current, [focusedScenario]: null }));
 
     try {
-      for (const [index, definition] of SCENARIOS.entries()) {
-        const entry = entries[definition.id] ?? await readEntry(definition);
-        setEntries((current) => ({ ...current, [definition.id]: entry }));
-        setActiveIndex(index);
-        onFocus(definition.id);
-
-        const response = await fetch(`/api/scenarios/${definition.id}/run`, {
-          method: "POST",
-          headers: { accept: "application/json", "content-type": "application/json" },
-          body: JSON.stringify(initializeEntryRequest(entry)),
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({})) as { error?: unknown };
-          throw new Error(
-            typeof payload.error === "string"
-              ? `${definition.label}：${payload.error}`
-              : `${definition.label}运行失败：HTTP ${response.status}`,
-          );
-        }
-
-        const report = asScenarioReport(await response.json());
-        if (report === null || !matchesDefinition(report, definition)) {
-          throw new Error(`${definition.label}返回了无效的服务端报告`);
-        }
-        setReports((current) => ({ ...current, [definition.id]: report }));
-        await wait(420);
+      await wait(260);
+      const response = await fetch(`/api/scenarios/${focusedScenario}/run`, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify(selectedRequest),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: unknown };
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : `${selectedDefinition.label}运行失败：HTTP ${response.status}`,
+        );
       }
-
-      setActiveIndex(-1);
+      const report = asScenarioReport(await response.json());
+      if (report === null || !matchesDefinition(report, selectedDefinition)) {
+        throw new Error(`${selectedDefinition.label}返回了无效的服务端报告`);
+      }
+      setReports((current) => ({ ...current, [focusedScenario]: report }));
+      for (let index = 0; index < report.steps.length; index += 1) {
+        setActiveStepIndex(index);
+        await wait(300);
+      }
+      setActiveStepIndex(-1);
       setClosing(true);
-      await wait(620);
+      await wait(520);
       setClosing(false);
       await onCompleted?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "完整闭环运行失败");
-      setActiveIndex(-1);
+      setError(cause instanceof Error ? cause.message : "动态闭环运行失败");
+      setActiveStepIndex(-1);
       setClosing(false);
     } finally {
       setRunning(false);
     }
   };
 
-  const nodes = useMemo<MasterNode[]>(() => SCENARIOS.map((definition, index) => {
-    const report = reports[definition.id];
-    const entry = entries[definition.id];
-    const state: FlowState = activeIndex === index
-      ? "running"
-      : report?.status === "passed"
-        ? "passed"
-        : report?.status === "failed"
-          ? "failed"
-          : "idle";
-    const lastStep = report?.steps.at(-1);
-    return {
-      id: definition.id,
-      type: "master",
-      position: v2Position(index, SCENARIOS.length, compact),
-      data: {
-        index: definition.scene,
-        eyebrow: index === 0 ? "SERVER DISCOVERY" : "SERVER ROUTE",
-        label: definition.label,
-        copy: activeIndex === index
-          ? "服务端路线正在流转…"
-          : lastStep?.detail
-            ?? `${entry?.discovery.tools.length ?? "—"} Tools · ${definition.description}`,
-        state,
-        view: "v2",
-        selected: definition.id === focusedScenario,
-        compact,
-        tags: definition.features.map((feature) => feature.tag),
+  const renderedSteps = useMemo(() => {
+    if (selectedRequest === undefined) return selectedDefinition.steps;
+    const report = selectedReport;
+    if (report !== null && report !== undefined) {
+      return report.steps.map((step) => ({ id: step.id, label: step.title, copy: step.detail }));
+    }
+    return plannedSteps(selectedDefinition, selectedRequest);
+  }, [selectedDefinition, selectedReport, selectedRequest]);
+
+  const routeNodes = useMemo<RouteNode[]>(() => {
+    const request = selectedRequest ?? { trigger: "ui", protocolMode: "auto", parameters: {} };
+    const entry = selectedEntry;
+    const sequence: RenderedStep[] = [
+      {
+        id: "discover",
+        label: "server/discover",
+        copy: entry === undefined
+          ? "正在读取服务端能力"
+          : `${entry.discovery.tools.length} Tools · ${entry.discovery.extensions.length} Extensions`,
       },
-    };
-  }), [activeIndex, compact, entries, focusedScenario, reports]);
+      {
+        id: "route",
+        label: `${selectedDefinition.label}条件路由`,
+        copy: conditionSummary(selectedDefinition, request),
+      },
+      ...renderedSteps,
+    ];
+    return sequence.map((step, index) => {
+      const result = selectedReport?.steps.find((item) => item.id === step.id);
+      const isRoute = step.id === "route";
+      const isDiscover = step.id === "discover";
+      return {
+        id: step.id,
+        type: "route",
+        position: routePosition(index, sequence.length, compact),
+        data: {
+          index: String(index).padStart(2, "0"),
+          eyebrow: isDiscover ? "LIVE CAPABILITIES" : isRoute ? "IF / THEN ROUTER" : "SERVER EVIDENCE",
+          label: step.label,
+          copy: result?.detail ?? step.copy,
+          state: nodeState(step.id, selectedReport, activeStepIndex, renderedSteps, running),
+          view: "v2",
+          selected: isRoute,
+          compact,
+          tags: isRoute
+            ? selectedDefinition.features.map((feature) => feature.tag)
+            : result?.evidence.slice(0, 2) ?? [],
+        },
+      };
+    });
+  }, [
+    activeStepIndex,
+    compact,
+    renderedSteps,
+    running,
+    selectedDefinition,
+    selectedEntry,
+    selectedReport,
+    selectedRequest,
+  ]);
 
-  const edges = useMemo<Edge[]>(() => SCENARIOS.map((definition, index) => {
-    const target = SCENARIOS[(index + 1) % SCENARIOS.length]!;
-    const active = index === SCENARIOS.length - 1 ? closing : activeIndex === index + 1;
-    const completed = reports[definition.id]?.status === "passed";
-    const failed = reports[definition.id]?.status === "failed";
-    return {
-      id: `${definition.id}-${target.id}`,
-      source: definition.id,
-      target: target.id,
-      animated: active,
-      label: index === SCENARIOS.length - 1 ? "Verdict 回流" : undefined,
-      className: failed
-        ? "master-edge-failed"
-        : active
-          ? "master-edge-running"
-          : completed
-            ? "master-edge-passed"
-            : "master-edge-idle",
-      markerEnd: { type: MarkerType.ArrowClosed },
-    };
-  }), [activeIndex, closing, reports]);
+  const routeEdges = useMemo<Edge[]>(() => {
+    const sequence = routeNodes.map((node) => node.id);
+    const edges: Edge[] = [];
 
-  const oldNodes = useMemo<MasterNode[]>(() => [
-    ["OLD 01", "STATIC CLIENT", "写死能力入口", "版本与调用顺序由客户端预设"],
-    ["OLD 02", "SINGLE REQUEST", "发起一次请求", "没有动态发现与路线协商"],
-    ["OLD 03", "CLIENT DECISION", "客户端解释结果", "成功与否取决于本地判断"],
-    ["OLD 04", "STOP", "流程结束", "没有服务端 Verdict 回流"],
+    if (selectedDefinition.id === "protocol" && sequence.includes("protocol.modern") && sequence.includes("protocol.legacy")) {
+      const beforeBranches = ["discover", "route"];
+      edges.push({
+        id: "discover-route",
+        source: beforeBranches[0]!,
+        target: beforeBranches[1]!,
+        label: "发现能力",
+      });
+      edges.push(
+        { id: "route-modern", source: "route", target: "protocol.modern", label: "mode ≠ legacy" },
+        { id: "route-legacy", source: "route", target: "protocol.legacy", label: "mode ≠ modern" },
+        { id: "modern-framing", source: "protocol.modern", target: "protocol.framing" },
+        { id: "legacy-framing", source: "protocol.legacy", target: "protocol.framing" },
+      );
+      const tail = ["protocol.framing", "protocol.boundary", "protocol.verdict", "discover"];
+      for (let index = 0; index < tail.length - 1; index += 1) {
+        edges.push({ id: `${tail[index]}-${tail[index + 1]}`, source: tail[index]!, target: tail[index + 1]! });
+      }
+    } else {
+      const closed = [...sequence, "discover"];
+      for (let index = 0; index < closed.length - 1; index += 1) {
+        edges.push({
+          id: `${closed[index]}-${closed[index + 1]}`,
+          source: closed[index]!,
+          target: closed[index + 1]!,
+          ...(index === closed.length - 2 ? { label: "Verdict → rediscover" } : {}),
+        });
+      }
+    }
+
+    return edges.map((edge) => {
+      const targetStepIndex = renderedSteps.findIndex((step) => step.id === edge.target);
+      const sourceReport = selectedReport?.steps.find((step) => step.id === edge.source);
+      const active = edge.target === "discover"
+        ? closing
+        : running && (
+          edge.target === "route"
+            ? activeStepIndex < 0 && !closing
+            : targetStepIndex === activeStepIndex
+        );
+      return {
+        ...edge,
+        animated: active,
+        className: sourceReport?.status === "failed"
+          ? "master-edge-failed"
+          : sourceReport?.status === "skipped"
+            ? "master-edge-skipped"
+            : active
+              ? "master-edge-running"
+              : selectedReport !== null && selectedReport !== undefined
+                ? "master-edge-passed"
+                : "master-edge-idle",
+        markerEnd: { type: MarkerType.ArrowClosed },
+      };
+    });
+  }, [activeStepIndex, closing, renderedSteps, routeNodes, running, selectedDefinition.id, selectedReport]);
+
+  const oldNodes = useMemo<RouteNode[]>(() => [
+    ["OLD 01", "STATIC CONFIG", "客户端写死能力", "预设版本、方法与调用顺序"],
+    ["OLD 02", "SESSION SETUP", "初始化与会话", "连接期协商后保存服务端状态"],
+    ["OLD 03", "SINGLE PATH", "固定调用路径", "条件变化依赖客户端重新编排"],
+    ["OLD 04", "CLIENT RESULT", "客户端解释结果", "没有 server/discover 驱动的再路由"],
   ].map(([index, eyebrow, label, copy], nodeIndex) => ({
     id: `old-${nodeIndex}`,
-    type: "master" as const,
+    type: "route" as const,
     position: oldPosition(nodeIndex, compact),
     data: {
       index: index!,
@@ -337,40 +506,38 @@ export function UnifiedWorkflow({
     markerEnd: { type: MarkerType.ArrowClosed },
   })), [oldNodes]);
 
-  const selectedDefinition = SCENARIOS.find((item) => item.id === focusedScenario) ?? SCENARIOS[0]!;
-  const selectedReport = reports[selectedDefinition.id];
-  const selectedEntry = entries[selectedDefinition.id];
-  const selectedEvidence = selectedReport?.steps.flatMap((step) => step.evidence).slice(0, 3) ?? [];
-  const allPassed = SCENARIOS.every((definition) => reports[definition.id]?.status === "passed");
+  const selectedEvidence = selectedReport === null
+    ? []
+    : [...selectedReport.steps].reverse().flatMap((step) => step.evidence).slice(0, 3);
+  const updateSelectedField = (field: ScenarioEntryField, value: ScenarioEntryValue) => {
+    if (selectedRequest === undefined) return;
+    setReports((current) => ({ ...current, [focusedScenario]: null }));
+    setRequests((current) => ({
+      ...current,
+      [focusedScenario]: updateField(selectedRequest, field, value),
+    }));
+  };
 
   return (
     <section className="master-flow" data-testid="master-workflow">
       <header className="master-flow-toolbar">
         <div className="master-flow-title">
-          <p>ONE LIVE CLOSED LOOP</p>
-          <h1>MCP v2 主流程</h1>
-          <span>动态发现 → 六条服务端路线 → 证据 Verdict → 回流入口</span>
+          <p>CAPABILITY-DRIVEN ROUTING</p>
+          <h1>MCP v2 动态路由</h1>
+          <span>验证路线（不是固定协议生命周期）：发现 → 条件选路 → 命中节点 → Verdict</span>
         </div>
         <div className="master-flow-controls">
           <div className="master-version-switch" role="group" aria-label="切换 React Flow 版本路径">
-            <button
-              type="button"
-              aria-pressed={flowView === "old"}
-              onClick={() => setFlowView("old")}
-            >
+            <button type="button" aria-pressed={flowView === "old"} onClick={() => setFlowView("old")}>
               老版本
             </button>
-            <button
-              type="button"
-              aria-pressed={flowView === "v2"}
-              onClick={() => setFlowView("v2")}
-            >
-              v2 实时闭环
+            <button type="button" aria-pressed={flowView === "v2"} onClick={() => setFlowView("v2")}>
+              v2 动态路由
             </button>
           </div>
           <Button
             variant="outline"
-            aria-label="刷新主流程"
+            aria-label="刷新动态入口"
             disabled={running || refreshing}
             onClick={() => void refresh()}
           >
@@ -378,43 +545,96 @@ export function UnifiedWorkflow({
             <span className="hidden sm:inline">{refreshing ? "发现中…" : "刷新"}</span>
           </Button>
           <Button
-            aria-label="运行完整 v2 闭环"
-            disabled={running || refreshing || Object.keys(entries).length !== SCENARIOS.length}
+            aria-label={flowView === "old" ? "老版本仅作概念对照" : "运行当前动态闭环"}
+            disabled={flowView === "old" || running || refreshing || selectedEntry === undefined}
             onClick={() => void run()}
           >
-            <PlayIcon data-icon="inline-start" />
-            {running ? "流转中…" : "运行完整闭环"}
+            {flowView === "old" ? <GitBranchIcon data-icon="inline-start" /> : <PlayIcon data-icon="inline-start" />}
+            {flowView === "old" ? "老版本仅对照" : running ? "流转中…" : "运行当前闭环"}
           </Button>
         </div>
       </header>
 
+      {flowView === "v2" && selectedEntry !== undefined && selectedRequest !== undefined && (
+        <div className="route-condition-bar" aria-label="当前动态路由条件">
+          <span className="route-condition-prefix">IF</span>
+          {selectedEntry.fields
+            .filter((field) => field.binding !== "protocolMode" || selectedDefinition.id === "protocol")
+            .map((field) => (
+            <label key={field.key}>
+              <small>{field.label}</small>
+              {field.control === "select" && (
+                <select
+                  aria-label={field.label}
+                  value={String(fieldValue(selectedRequest, field))}
+                  disabled={running}
+                  onChange={(event) => updateSelectedField(field, event.target.value)}
+                >
+                  {field.options?.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+                  ))}
+                </select>
+              )}
+              {field.control === "text" && (
+                <input
+                  aria-label={field.label}
+                  type="text"
+                  value={String(fieldValue(selectedRequest, field))}
+                  disabled={running}
+                  onChange={(event) => updateSelectedField(field, event.target.value)}
+                />
+              )}
+              {field.control === "boolean" && (
+                <select
+                  aria-label={field.label}
+                  value={String(fieldValue(selectedRequest, field))}
+                  disabled={running}
+                  onChange={(event) => updateSelectedField(field, event.target.value === "true")}
+                >
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+              )}
+            </label>
+          ))}
+          <span className="route-condition-then">THEN · {renderedSteps.map((step) => step.label).join(" → ")}</span>
+        </div>
+      )}
+
       <div className="master-flow-status" role="status" aria-live="polite">
-        <span className={`status-dot ${error ? "failed" : running ? "running" : allPassed ? "passed" : "checking"}`} />
-        <strong>{error ?? (running ? `${SCENARIOS[activeIndex]?.label ?? "Verdict"}正在流转` : allPassed ? "六条服务端路线已闭环" : "等待运行")}</strong>
+        <span className={`status-dot ${error ? "failed" : running ? "running" : selectedReport?.status ?? "checking"}`} />
+        <strong>
+          {error
+            ?? (selectedReport?.status === "passed"
+                ? `${selectedDefinition.label}路线已闭环`
+                : running
+                  ? `${selectedDefinition.label}路线正在流转`
+                : "等待选择条件并运行")}
+        </strong>
         <span>
           {flowView === "old"
-            ? "概念对照，不发送请求"
-            : allPassed
-              ? "结论来自六份服务端报告"
-              : "节点状态只读取服务端证据"}
+            ? "概念对照不发送请求；真实 Legacy 请在协议路线选择"
+            : selectedRequest === undefined
+              ? "正在读取 server/discover"
+              : conditionSummary(selectedDefinition, selectedRequest)}
         </span>
       </div>
 
       <div className="master-canvas" data-testid="master-canvas" data-view={flowView}>
-        <ReactFlow<MasterNode, Edge>
-          key={`${flowView}-${compact ? "compact" : "wide"}`}
-          nodes={flowView === "v2" ? nodes : oldNodes}
-          edges={flowView === "v2" ? edges : oldEdges}
+        <ReactFlow<RouteNode, Edge>
+          key={`${flowView}-${focusedScenario}-${selectedEntry === undefined ? "loading" : "ready"}-${routeNodes.map((node) => node.id).join(":")}-${compact ? "compact" : "wide"}`}
+          nodes={flowView === "v2" ? routeNodes : oldNodes}
+          edges={flowView === "v2" ? routeEdges : oldEdges}
           nodeTypes={nodeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
           onNodeClick={(_, node) => {
-            if (flowView === "v2" && SCENARIOS.some((item) => item.id === node.id)) {
-              onFocus(node.id as ScenarioId);
-            }
+            if (flowView !== "v2") return;
+            const scenario = SCENARIOS.find((item) => item.steps.some((step) => step.id === node.id));
+            if (scenario !== undefined) onFocus(scenario.id);
           }}
-          minZoom={0.42}
+          minZoom={0.4}
           maxZoom={1.3}
           fitView
           fitViewOptions={{ padding: compact ? 0.08 : 0.16 }}
@@ -433,17 +653,17 @@ export function UnifiedWorkflow({
         >
           <span className={`status-dot ${selectedReport?.status ?? "checking"}`} />
           <div className="master-evidence-title">
-            <small>SCENE {selectedDefinition.scene} · SERVER EVIDENCE</small>
+            <small>SCENE {selectedDefinition.scene} · MATCHED ROUTE</small>
             <strong>{selectedDefinition.label}</strong>
           </div>
           <p>
             {selectedReport?.steps.at(-1)?.detail
-              ?? `${selectedEntry?.discovery.extensions.join(" · ") || "正在发现服务端扩展"} · 点击节点查看对应路线`}
+              ?? `条件命中 ${renderedSteps.length} 个执行节点；未命中节点不会进入实际路线`}
           </p>
           <div className="master-evidence-codes">
             {selectedEvidence.length > 0
               ? selectedEvidence.map((item) => <code key={item}>{item}</code>)
-              : selectedDefinition.features.map((feature) => <code key={feature.id}>{feature.tag}</code>)}
+              : <code>{selectedRequest === undefined ? "WAITING DISCOVERY" : conditionSummary(selectedDefinition, selectedRequest)}</code>}
           </div>
           <time>{selectedReport?.runId ?? "NO RUN"}</time>
         </footer>

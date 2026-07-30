@@ -82,6 +82,61 @@
   background: color-mix(in oklch, var(--muted) 62%, transparent);
 }
 
+.route-condition-bar {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: end;
+  gap: 0.65rem;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--primary) 3%, var(--card));
+  overflow-x: auto;
+}
+
+.route-condition-prefix {
+  align-self: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.5rem;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.route-condition-bar label {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 0.2rem;
+}
+
+.route-condition-bar label small {
+  color: var(--muted-foreground);
+  font-size: 0.55rem;
+}
+
+.route-condition-bar select,
+.route-condition-bar input {
+  min-width: 8.5rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 0.55rem;
+  color: var(--foreground);
+  background: var(--background);
+  font-size: 0.68rem;
+}
+
+.route-condition-then {
+  align-self: center;
+  min-width: 15rem;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  line-height: 1.45;
+}
+
 .master-flow-status strong {
   font-size: 0.72rem;
 }
@@ -230,6 +285,11 @@
   background: var(--destructive);
 }
 
+.master-node-skipped {
+  border-style: dashed;
+  opacity: 0.68;
+}
+
 .master-node-old {
   min-height: 6.5rem;
   border-style: dashed;
@@ -259,6 +319,11 @@
 
 .master-canvas .master-edge-failed .react-flow__edge-path {
   stroke: var(--destructive);
+}
+
+.master-canvas .master-edge-skipped .react-flow__edge-path {
+  stroke-dasharray: 4 5;
+  opacity: 0.6;
 }
 
 .master-canvas .master-edge-old .react-flow__edge-path {
@@ -397,6 +462,15 @@
   .master-flow-status {
     flex-wrap: wrap;
     padding-inline: 1rem;
+  }
+
+  .route-condition-bar {
+    align-items: end;
+    padding-inline: 1rem;
+  }
+
+  .route-condition-then {
+    min-width: 13rem;
   }
 
   .master-flow-status > span:last-child {

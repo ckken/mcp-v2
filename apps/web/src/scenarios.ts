@@ -105,7 +105,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
         stepId: "protocol.modern",
         before: "单一版本路径无法证明 modern 与兼容客户端的真实边界。",
         now: "入口可选择 auto、Modern 2026-07-28 或 Legacy 2025-06-18。",
-        proof: "握手节点回显 Client 实际协商的 protocolVersion。",
+        proof: "自包含请求或 Legacy 兼容节点回显实际 protocolVersion。",
       },
       {
         id: "era-framing",
@@ -127,8 +127,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
       },
     ],
     steps: steps([
-      ["protocol.modern", "Modern 握手", "按入口协商 2026-07-28"],
-      ["protocol.legacy", "Legacy 握手", "验证 stateless fallback"],
+      ["protocol.modern", "Modern 自包含请求", "请求携带版本、客户端信息与能力"],
+      ["protocol.legacy", "Legacy 兼容连接", "验证 2025-06-18 stateless fallback"],
       ["protocol.framing", "响应封装", "区分 JSON 与 SSE framing"],
       ["protocol.boundary", "传输边界", "拒绝虚假订阅与独立 SSE"],
       ["protocol.verdict", "协议结论", "收敛本场景证据"],

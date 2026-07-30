@@ -142,13 +142,13 @@ export function App() {
           <SidebarHeader>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton size="lg" tooltip="MCP v2 主流程" onClick={() => setFocusedScenario("loop")}>
+                <SidebarMenuButton size="lg" tooltip="MCP v2 动态路由" onClick={() => setFocusedScenario("loop")}>
                   <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <ActivityIcon />
                   </span>
                   <span className="grid min-w-0 flex-1 text-left">
-                    <strong className="truncate text-sm">MCP v2 主流程</strong>
-                    <span className="truncate text-xs text-muted-foreground">一个真实证据闭环</span>
+                    <strong className="truncate text-sm">MCP v2 动态路由</strong>
+                    <span className="truncate text-xs text-muted-foreground">条件驱动的真实闭环</span>
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -191,7 +191,7 @@ export function App() {
             </div>
             <Badge variant="outline" className="hidden sm:inline-flex">2026-07-28</Badge>
             <div className="statusbar-scene">
-              <span>FLOW NODE {focused.scene}</span>
+              <span>ROUTE {focused.scene}</span>
               <strong>{focused.label}</strong>
             </div>
             <Button

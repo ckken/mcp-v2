@@ -11,7 +11,7 @@
 | Modern MCP | 通过 | 当前用例 100% | pinned/auto 协商 `2026-07-28`，成功响应为 JSON |
 | v2 新特征 | 通过 | 本项目选定范围 5/5 | cache hints、JSON Schema 2020-12/outputSchema、Trace Context、`input_required`、Extensions |
 | Legacy Codex 兼容 | 通过 | 当前用例 100% | `2025-06-18` stateless fallback，结果使用 SSE 响应帧 |
-| Web 主 Flow | 通过 | desktop + 390px，10/10 | 单画布、六路线、老版概念切换、动态 Tool 路由 |
+| Web 动态 Flow | 通过 | desktop + 390px，10/10 | 条件选路、协议分支、老版保持对照、动态 Tool 路由 |
 | 独立场景闭环 | 通过 | 6/6（100%） | Scene 00–05 入口动态发现，参数改变实际路线，报告与运行状态隔离 |
 | Auth 基线 | 通过 | Demo/内网基线 | Bearer Token、scope、401、403、授权调用；不等同完整 OAuth/OIDC |
 | Codex Desktop 内嵌 UI | 未验证 | 不计入通过 | Tool 可调用，但尚无可确认的 widget 渲染证据 |

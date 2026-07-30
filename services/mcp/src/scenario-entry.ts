@@ -96,7 +96,7 @@ function fieldsFor(
         {
           key: "focus",
           label: "闭环焦点",
-          description: "决定闭环入口首先核对的 v2 运行面",
+          description: "决定闭环证据聚焦的 v2 运行面",
           control: "select",
           binding: "selection",
           required: true,

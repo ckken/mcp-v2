@@ -53,20 +53,21 @@ tests/e2e         真实浏览器验收
 ## 可视化验证中心
 
 前端必须由真实请求驱动，不允许硬编码通过状态。界面使用一个 React Flow
-主闭环投影六条相互隔离的服务端路线：
+动态路由器，根据实时入口条件渲染六条相互隔离路线中的当前命中路线：
 
 | 场景 | 独立闭环 |
 | --- | --- |
 | 00 闭环实验 | status → registry → catalogs → matrix → verdict → Ready，只检查自身且不触发其他场景 |
-| 01 协议 | 根据 auto/modern/legacy 入口选择握手 → framing → boundary → verdict → Entry |
+| 01 协议 | 根据 auto/modern/legacy 选择自包含 Modern 请求和/或 Legacy 兼容连接 → framing → boundary → verdict → Entry |
 | 02 工具 | discovery → schema/annotations → selected call → optional application Tasks → verdict → Entry |
 | 03 技能 | Prompts → discovery → execution → input/error → verdict → Ready |
 | 04 MCP 应用 | metadata → Resource → bridge → render → verdict → Ready |
 | 05 Codex 会话 | start → calls → evidence → confirm → verdict → Ready |
 
-六条服务端路线拥有独立动态入口、运行状态和最新报告。单一主 Flow 按顺序
-调用路线并播放真实响应，左侧入口只定位节点；底部只保留当前节点的轻量证据
-条。老版本/v2 切换直接更换 React Flow 节点和边，老版本概念对照不发送请求。
+六条服务端路线拥有独立动态入口、运行状态和最新报告。左侧选择运行面，
+上方入口字段展示 protocol、selection 与 parameters 的 IF 条件，画布只渲染
+命中的步骤；条件变化后旧证据不再投影。老版本/v2 切换直接更换节点和边，
+老版本概念对照不发送请求且运行按钮保持禁用。
 
 ## Codex 会话验收协议
 

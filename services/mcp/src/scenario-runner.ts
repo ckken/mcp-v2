@@ -223,20 +223,20 @@ async function runProtocolScenario(
   };
 
   if (entry.protocolMode !== "legacy") {
-    await step("protocol.modern", "Modern 握手", async () => {
+    await step("protocol.modern", "Modern 自包含请求", async () => {
       const client = createClient("scenario-protocol-modern");
       await client.connect(createTransport(mcpUrl, authToken, recordingFetch("modern")));
       try {
         assert(client.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "Modern negotiation failed");
         await client.callTool({ name: "system.health", arguments: {}, _meta: traceMeta(entry) });
-        return { detail: "Modern Client 协商并调用成功", evidence: [`version=${MODERN_PROTOCOL_VERSION}`] };
+        return { detail: "Modern Client 以请求级元数据完成无状态调用", evidence: [`version=${MODERN_PROTOCOL_VERSION}`] };
       } finally {
         await client.close();
       }
     });
   }
   if (entry.protocolMode !== "modern") {
-    await step("protocol.legacy", "Legacy 握手", async () => {
+    await step("protocol.legacy", "Legacy 兼容连接", async () => {
       const client = createClient("scenario-protocol-legacy", "legacy");
       await client.connect(createTransport(mcpUrl, authToken, recordingFetch("legacy")));
       try {

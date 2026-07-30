@@ -14,7 +14,7 @@ acceptance gates.
 | --- | --- | --- |
 | Protocol runtime | `services/mcp` | MCP transport, negotiation, Tools, Resources, Prompts, application Tasks, Auth baseline, and verification evidence |
 | MCP App | `apps/mcp-app` | Self-contained `ui://` order dashboard and host bridge interaction |
-| Verification host | `apps/web` | One React Flow master loop that projects six independent server-owned routes and browser acceptance |
+| Verification host | `apps/web` | One condition-driven React Flow that renders the currently matched server-owned route and browser acceptance |
 | Shared contracts | `packages/shared` | Cross-workspace schemas, fixtures, and stable DTOs |
 | Delivery gate | root workspace | Typecheck, tests, builds, HTTP acceptance, browser acceptance, and Codex-oriented acceptance |
 
@@ -28,7 +28,7 @@ acceptance gates.
 | Task | An application-level workflow exposed through `tasks.*` Tools; it does not claim removed native Task RPC support |
 | MCP App | A Tool-linked `ui://` Resource rendered by a host through the MCP Apps bridge |
 | verification | Server-owned evidence and confirmation state; clients cannot directly manufacture a passing result |
-| scenario | A server-owned runtime route derived from a bounded dynamic entry; the single master Flow composes six isolated latest results without manufacturing evidence |
+| scenario | A server-owned runtime route derived from a bounded dynamic entry; the Flow renders one matched route and only reuses evidence when protocol, selection, and parameters match |
 
 ## Non-negotiable boundaries
 
