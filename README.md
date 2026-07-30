@@ -70,6 +70,17 @@ bun run dev
 - 验证中心：<http://localhost:3000/>
 - MCP Server：<http://localhost:3001/mcp>
 
+生产容器把构建后的验证中心、`/api` 和 `/mcp` 统一暴露在 `3000` 端口：
+
+```bash
+docker compose -f compose.production.yml build
+docker compose -f compose.production.yml up -d
+```
+
+生产入口：<https://mcp-v2.kenvoai.com/>，MCP Endpoint：
+<https://mcp-v2.kenvoai.com/mcp>。容器以非 root、只读文件系统运行，并通过
+共享 `edge` 网络交给 Caddy 终止 TLS。
+
 完整验收：
 
 ```bash

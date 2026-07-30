@@ -7,6 +7,7 @@
     "build:mcp-app": "bun run --cwd ../../apps/mcp-app build",
     "dev": "bun --watch src/index.ts",
     "start": "bun run build:mcp-app && bun src/index.ts",
+    "start:production": "bun src/production.ts",
     "typecheck": "bunx --bun tsc --noEmit",
     "test": "bun test",
     "build": "bunx --bun tsc --noEmit",

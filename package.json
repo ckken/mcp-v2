@@ -12,6 +12,7 @@
     "dev": "bun run --cwd apps/mcp-app build && bun run --filter '*' dev",
     "dev:web": "bun run --cwd apps/web dev",
     "dev:mcp": "bun run --cwd apps/mcp-app build && bun run --cwd services/mcp dev",
+    "start:production": "bun run --cwd services/mcp start:production",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",

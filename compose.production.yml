@@ -1,0 +1,25 @@
+services:
+  mcp-v2:
+    image: mcp-v2:${MCP_V2_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-v2
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    environment:
+      HOST: 0.0.0.0
+      INTERNAL_MCP_URL: http://127.0.0.1:3000/mcp
+      NODE_ENV: production
+      PORT: "3000"
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true

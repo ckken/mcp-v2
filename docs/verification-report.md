@@ -108,7 +108,7 @@
 | 门禁 | 实际结果 |
 | --- | --- |
 | TypeScript | 4 个 workspace 通过 |
-| Bun tests | 20/20 |
+| Bun tests | 23/23 |
 | Production build | Web、MCP App、Server 通过 |
 | HTTP acceptance | 通过，含 Prompt、Task、Auth、6 个场景闭环与隔离 |
 | 服务端 E2E | 25/25 |

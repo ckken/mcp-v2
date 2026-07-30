@@ -42,6 +42,7 @@ export interface AppAuthConfig {
 
 export interface AppOptions {
   readonly auth?: AppAuthConfig;
+  readonly internalMcpUrl?: URL;
 }
 
 function runtimeAuthConfig(): AppAuthConfig | undefined {
@@ -82,6 +83,7 @@ export function createApp(options: AppOptions = {}) {
     (auth.requiredScopes ?? [MCP_AUTH_SCOPE]).every((scope) => candidate.scopes.includes(scope))
   )?.token;
   const scenarioRunner = createScenarioRunner();
+  const resolveMcpUrl = (requestUrl: URL) => options.internalMcpUrl ?? new URL("/mcp", requestUrl);
 
   return {
     async fetch(request: Request): Promise<Response> {
@@ -97,21 +99,21 @@ export function createApp(options: AppOptions = {}) {
           const body = await request.json() as { name?: unknown; arguments?: unknown };
           if (typeof body.name !== "string") return json({ error: "Tool name is required" }, 400);
           const args = body.arguments && typeof body.arguments === "object" ? body.arguments as Record<string, unknown> : {};
-          return json(await callMcpAppTool(new URL("/mcp", url), body.name, args, internalAuthToken));
+          return json(await callMcpAppTool(resolveMcpUrl(url), body.name, args, internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "MCP App tool call failed" }, 400);
         }
       }
       if (request.method === "POST" && url.pathname === "/api/verification/run") {
         try {
-          return json(await runVerification(new URL("/mcp", url), "web-verification-center", internalAuthToken));
+          return json(await runVerification(resolveMcpUrl(url), "web-verification-center", internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "Verification failed" }, 500);
         }
       }
       if (request.method === "POST" && url.pathname === "/api/e2e/run") {
         try {
-          return json(await runE2eSuite(new URL("/mcp", url), internalAuthToken));
+          return json(await runE2eSuite(resolveMcpUrl(url), internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "E2E suite failed" }, 500);
         }
@@ -121,7 +123,7 @@ export function createApp(options: AppOptions = {}) {
         const scenarioId = scenarioRunMatch[1] ?? "";
         if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
         try {
-          return json(await scenarioRunner.runScenario(scenarioId, new URL("/mcp", url), internalAuthToken));
+          return json(await scenarioRunner.runScenario(scenarioId, resolveMcpUrl(url), internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "Scenario failed" }, 500);
         }
@@ -153,7 +155,7 @@ export function createApp(options: AppOptions = {}) {
           const parameters: { view?: DashboardView; status?: DashboardStatus } = {};
           if (view === "overview" || view === "orders" || view === "status") parameters.view = view;
           if (status === "all" || status === "paid" || status === "pending" || status === "fulfilled") parameters.status = status;
-          return json(await loadMcpApp(new URL("/mcp", url), parameters, internalAuthToken));
+          return json(await loadMcpApp(resolveMcpUrl(url), parameters, internalAuthToken));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "MCP App load failed" }, 500);
         }
@@ -209,6 +211,12 @@ export function createApp(options: AppOptions = {}) {
 }
 
 const runtimeAuth = runtimeAuthConfig();
-export const app = createApp(runtimeAuth === undefined ? {} : { auth: runtimeAuth });
+const runtimeInternalMcpUrl = Bun.env.INTERNAL_MCP_URL;
+export const app = createApp({
+  ...(runtimeAuth === undefined ? {} : { auth: runtimeAuth }),
+  ...(runtimeInternalMcpUrl === undefined || runtimeInternalMcpUrl === ""
+    ? {}
+    : { internalMcpUrl: new URL(runtimeInternalMcpUrl) }),
+});
 
 if (import.meta.main) Bun.serve({ hostname: "0.0.0.0", port, fetch: app.fetch });
