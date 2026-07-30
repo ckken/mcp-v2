@@ -24,7 +24,7 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
 
   await openDashboardSection(page, "05 · Codex 会话");
   await page.getByRole("button", { name: "运行会话验证" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Codex 会话", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Codex 会话工作流", exact: true })).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-codex").locator(".scenario-edge-running")).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-codex").getByText("闭环已通过", { exact: true })).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-codex").getByText("system.health")).toBeVisible();
@@ -63,6 +63,7 @@ test("renders every navigation entry as an independent scene", async ({ page }) 
   await expect(page.getByText("总览", { exact: true })).toHaveCount(0);
   await expect(page.getByText("全链路验收", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("MCP 服务在线");
+  await expect(page.locator(".scene-stage-header")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "刷新数据" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "运行会话验证" })).toHaveCount(0);
 
@@ -75,8 +76,7 @@ test("renders every navigation entry as an independent scene", async ({ page }) 
     ["05 · Codex 会话", "Codex 会话", "SCENE 05", "codex"],
   ]) {
     await openDashboardSection(page, navigation);
-    await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
-    await expect(page.locator(".scene-stage-index")).toHaveText(scene.slice(-2));
+    await expect(page.getByRole("heading", { level: 2, name: `${title}工作流`, exact: true })).toBeVisible();
     await expect(page.locator(".scene-stage")).toHaveAttribute("data-scene", scene.slice(-2));
     await expect(page.getByTestId(`scenario-workflow-${id}`)).toBeVisible();
     await expect(page.getByTestId(`scenario-canvas-${id}`)).toBeVisible();

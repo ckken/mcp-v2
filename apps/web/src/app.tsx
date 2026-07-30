@@ -234,15 +234,6 @@ function SceneStage({
 }) {
   return (
     <section className="scene-stage" data-scene={page.scene}>
-      <header className="scene-stage-header">
-        <span className="scene-stage-index">{page.scene}</span>
-        <div>
-          <p>{page.signal}</p>
-          <h1>{page.label}</h1>
-          <span>{page.description}</span>
-        </div>
-        <Badge variant="outline">LIVE SCENE</Badge>
-      </header>
       <div className="scene-stage-content">{children}</div>
     </section>
   );
