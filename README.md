@@ -18,19 +18,18 @@
 | MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过 |
 | 参数化 Dashboard | `view`、`status`、`query` 驱动 shadcn/ui 界面 | 桌面浏览器与 390px 已通过 |
 | Codex 会话验收 | 新会话直接调用 Tool，并记录脱敏证据 | 已通过 |
-| Fox Trail E2E | React Flow 场景地图实时执行 modern + legacy 的 20 个用例 | 20/20 |
+| Case Pulse E2E | React Flow 场景地图逐条呈现 modern + legacy 的 20 个用例 | 20/20 |
 
-## Fox Trail 可视化验收
+## Case Pulse 可视化验收
 
 <p align="center">
-  <img src="./artifacts/fox-e2e-trail.png" alt="Kenvo 狐狸巡检 MCP 六个 E2E 场景" width="100%" />
+  <img src="./artifacts/e2e-case-pulse.png" alt="MCP E2E Case Pulse：二十个用例逐条动效呈现" width="100%" />
 </p>
 
 `E2E Lab` 使用 React Flow 把 Protocol、Discovery、Tools、Skills、
-Verification 和 MCP Apps 组织成六个巡检场景。Kenvo 狐狸来自
-[`ckken/agent-skills`](https://github.com/ckken/agent-skills) 的官方视觉资产。
-点击“释放狐狸”会真实调用服务端；页面只在收到完整报告后显示通过状态，点击
-任一场景可以查看该组用例的耗时和脱敏证据。
+Verification 和 MCP Apps 组织成六个场景。真实报告返回后，20 个用例会
+逐条经过 queued、running 和 passed/failed 状态；点击任一场景可以查看该组
+用例的耗时和脱敏证据。
 
 `orders.dashboard` 是这里最直观的实验。它返回一个 React + shadcn/ui
 Dashboard，组件里的 Tabs 和 Select 会再次调用 Tool，拿到新的
@@ -70,7 +69,7 @@ bun run acceptance
 
 ```text
 apps/mcp-app   shadcn/ui MCP App，构建为单文件 HTML
-apps/web       React Flow 狐狸巡检验证中心与 MCP App Host
+apps/web       React Flow 逐用例验证中心与 MCP App Host
 services/mcp   Bun MCP Server、Tool、Resource 和验收脚本
 packages/shared
                共享契约与测试夹具

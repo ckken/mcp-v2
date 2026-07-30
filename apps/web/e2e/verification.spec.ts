@@ -24,33 +24,56 @@ test("runs and renders the complete 20-case E2E matrix", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "E2E Lab" }).click();
   await expect(page.getByRole("heading", { name: "全链路 E2E 验收" })).toBeVisible();
-  await expect(page.getByAltText("Kenvo Agent Skills 狐狸 IP")).toBeVisible();
-  await expect(page.getByTestId("fox-trail-canvas")).toBeVisible();
+  await expect(page.getByLabel("20 case animated matrix")).toBeVisible();
+  await expect(page.getByTestId("scenario-flow-canvas")).toBeVisible();
+  await expect(page.locator('img[src*="agent-skills-fox"]')).toHaveCount(0);
   const runE2e = page.getByRole("button", { name: "运行全部 E2E" });
   await runE2e.click();
   await expect(runE2e).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "狐狸正在穿越六个场景" })).toBeVisible();
+  await expect(page.getByTestId("case-playback")).toBeVisible();
+  await expect(page.locator('.case-pulse[data-state="running"]')).toBeVisible();
   await expect(runE2e).toBeEnabled();
 
-  await expect(page.getByRole("heading", { name: "20 个用例全部通过" })).toBeVisible();
+  const latestResponse = await page.request.get("/api/e2e/latest");
+  const latestPayload = await latestResponse.json() as {
+    report: {
+      total: number;
+      passed: number;
+      failed: number;
+      cases: Array<{ id: string; group: string; status: "passed" | "failed" }>;
+    };
+  };
+  const latest = latestPayload.report;
+  expect(latest.total).toBe(20);
+  expect(latest.cases).toHaveLength(20);
+  await expect(page.getByRole("heading", {
+    name: latest.failed === 0 ? `${latest.total} 个用例全部通过` : `${latest.failed} 个用例失败`,
+  })).toBeVisible();
   await expect(page.getByLabel("E2E summary")).toContainText("20");
+  await expect(page.locator('.case-pulse[data-state="passed"]')).toHaveCount(latest.passed);
+  await expect(page.locator('.case-pulse[data-state="failed"]')).toHaveCount(latest.failed);
   const sceneRail = page.getByRole("navigation", { name: "E2E 场景切换" });
   for (const group of ["Protocol", "Discovery", "Tools", "Skills", "Verification", "MCP Apps"]) {
     await expect(sceneRail.getByRole("button", { name: new RegExp(group) })).toBeVisible();
   }
 
   const scenes: Array<[string, string[]]> = [
-    ["Protocol", ["protocol.modern", "protocol.legacy"]],
-    ["Discovery", ["discovery.tools"]],
-    ["Tools", ["tool.dashboard-status"]],
-    ["Skills", ["skills.order-summary", "skills.checklist", "skills.unknown"]],
+    ["Protocol", ["protocol.json-http", "protocol.modern", "protocol.legacy"]],
+    ["Discovery", ["discovery.tools", "discovery.resource"]],
+    ["Tools", ["tool.health", "tool.orders-hit", "tool.orders-miss", "tool.dashboard-overview", "tool.dashboard-orders", "tool.dashboard-status"]],
+    ["Skills", ["skills.discover", "skills.order-summary", "skills.order-summary-default", "skills.checklist", "skills.unknown"]],
     ["Verification", ["verification.success", "verification.rejected"]],
-    ["MCP Apps", ["mcp-app.resource"]],
+    ["MCP Apps", ["mcp-app.resource", "mcp-app.metadata"]],
   ];
   for (const [group, ids] of scenes) {
     await sceneRail.getByRole("button", { name: new RegExp(group) }).click();
     await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
-    for (const id of ids) await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(/passed/);
+    for (const id of ids) {
+      const expected = latest.cases.find((item) => item.id === id)?.status;
+      expect(expected).toBeDefined();
+      await expect(page.getByTestId(`case-pulse-${id}`)).toHaveAttribute("data-state", expected!);
+      await expect(page.getByTestId(`e2e-case-${id}`)).toHaveClass(new RegExp(expected!));
+    }
   }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
