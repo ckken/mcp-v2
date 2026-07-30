@@ -7,14 +7,40 @@ type Page = "Overview" | "E2E Lab" | "Protocol" | "Tools" | "Skills" | "MCP Apps
 type Run = VerificationRunView;
 
 const pages: Page[] = ["Overview", "E2E Lab", "Protocol", "Tools", "Skills", "MCP Apps", "Codex Session"];
+const pageLabels: Record<Page, string> = {
+  Overview: "总览",
+  "E2E Lab": "全链路验收",
+  Protocol: "协议",
+  Tools: "工具",
+  Skills: "技能",
+  "MCP Apps": "MCP 应用",
+  "Codex Session": "Codex 会话",
+};
 const protocolRows = [
-  ["server/discover", "Modern capability discovery", "required"],
-  ["request envelope", "Protocol version on every request", "required"],
-  ["modern response", "2026-era results use application/json", "required"],
-  ["legacy fallback", "2025-era stateless POST results use SSE framing", "enabled"],
-  ["SSE endpoint", "No standalone legacy SSE endpoint", "disabled"],
+  ["server/discover", "发现服务端能力", "必需"],
+  ["request envelope", "每次请求都携带协议版本", "必需"],
+  ["modern response", "2026 版本返回 application/json", "必需"],
+  ["legacy fallback", "2025 版本的无状态 POST 使用 SSE 帧", "已启用"],
+  ["SSE endpoint", "不提供独立的旧版 SSE 端点", "已关闭"],
+  ["prompts/list + get", "2 个原生 Prompt，modern 与 legacy 可用", "已启用"],
+  ["tasks.* tools", "应用级创建、轮询、列表、取消和结果", "已启用"],
+  ["bearer auth", "配置 Token 后启用 scope 校验", "可配置"],
 ];
-const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
+const demoTools = [
+  "system.health",
+  "orders.search",
+  "orders.dashboard",
+  "skills.discover",
+  "skills.run",
+  "verification.start",
+  "verification.status",
+  "verification.finish",
+  "tasks.create",
+  "tasks.status",
+  "tasks.list",
+  "tasks.cancel",
+  "tasks.result",
+];
 const demoSkills = ["skills.discover", "skills.run"];
 
 export function App() {
@@ -57,7 +83,7 @@ export function App() {
       await refresh();
       setPage("Codex Session");
     } catch (error) {
-      setRunError(error instanceof Error ? error.message : "Verification failed");
+      setRunError(error instanceof Error ? error.message : "会话验证失败");
       setRefreshing(false);
     }
   };
@@ -68,20 +94,19 @@ export function App() {
 
   return <main className="shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">M</span><span>MCP V2</span></div>
-      <p className="eyebrow">VISUAL VERIFICATION</p>
-      <nav aria-label="Verification sections">{pages.map((item) => <button className={page === item ? "nav active" : "nav"} key={item} onClick={() => setPage(item)}>{item}</button>)}</nav>
-      <div className="side-foot"><span className={`dot ${health}`} /> {health === "online" ? "API connected" : health === "checking" ? "Checking API" : "API unavailable"}</div>
+      <div className="brand"><span className="brand-mark">M</span><span>MCP v2 实验室</span></div>
+      <nav aria-label="验证页面">{pages.map((item) => <button className={page === item ? "nav active" : "nav"} key={item} onClick={() => setPage(item)}>{pageLabels[item]}</button>)}</nav>
+      <div className="side-foot"><span className={`dot ${health}`} /> {health === "online" ? "服务已连接" : health === "checking" ? "正在连接" : "服务不可用"}</div>
     </aside>
     <section className="content">
-      <header className="topbar"><div><p className="eyebrow">CONTROL PLANE</p><h1>{page}</h1></div><div className="actions"><button className="ghost" disabled={refreshing} onClick={() => void refresh()}>Refresh data</button><button className="refresh" disabled={refreshing} onClick={() => void runVerification()}>{refreshing ? "Running…" : "Run verification"}</button></div></header>
-      {health === "unavailable" && <div className="notice" role="status">Backend unavailable — data-dependent checks are not reported as successful. Start the MCP service, then refresh.</div>}
-      {runError !== null && <div className="notice" role="alert">Verification failed: {runError}</div>}
+      <header className="topbar"><div><p className="eyebrow">MCP v2 可视化验证</p><h1>{pageLabels[page]}</h1></div><div className="actions"><button className="ghost" disabled={refreshing} onClick={() => void refresh()}>刷新数据</button><button className="refresh" disabled={refreshing} onClick={() => void runVerification()}>{refreshing ? "正在运行…" : "运行会话验证"}</button></div></header>
+      {health === "unavailable" && <div className="notice" role="status">后端没有响应。依赖实时数据的检查不会显示为通过，请启动 MCP 服务后刷新。</div>}
+      {runError !== null && <div className="notice" role="alert">会话验证失败：{runError}</div>}
       {page === "Overview" && <Overview health={health} runs={runs} passed={passed} active={active} />}
       {page === "E2E Lab" && <E2eFlowLab />}
       {page === "Protocol" && <Protocol />}
-      {page === "Tools" && <Catalog title="Tool registry" items={demoTools} endpoint="/api/demo/tools" />}
-      {page === "Skills" && <Catalog title="Skill registry" items={demoSkills} endpoint="/api/demo/skills" />}
+      {page === "Tools" && <Catalog title="工具清单" items={demoTools} endpoint="/api/demo/tools" />}
+      {page === "Skills" && <Catalog title="技能清单" items={demoSkills} endpoint="/api/demo/skills" />}
       {page === "MCP Apps" && <McpApps />}
       {page === "Codex Session" && <Session runs={runs} />}
     </section>
@@ -89,20 +114,20 @@ export function App() {
 }
 
 function Overview({ health, runs, passed, active }: { health: Health; runs: Run[]; passed: number; active: number }) {
-  return <><section className="hero"><div><p className="eyebrow">SYSTEM CONFIDENCE</p><h2>See every MCP contract before it reaches an agent.</h2><p className="muted">Live status, verification runs, protocol semantics, and sandboxed MCP Apps in one operator view.</p></div><div className={`health-card ${health}`}><span className="dot"/><strong>{health === "online" ? "Service reachable" : health === "checking" ? "Contacting service" : "Service unavailable"}</strong><small>{health === "online" ? "/api/status responded" : "No successful API status response"}</small></div></section>
-  <section className="metrics"><Metric label="Verification runs" value={String(runs.length)} /><Metric label="Passed" value={String(passed)} /><Metric label="Running" value={String(active)} /><Metric label="Transport" value={health === "online" ? "Live" : "—"} /></section>
-  <section className="panel"><div className="panel-head"><div><p className="eyebrow">RECENT ACTIVITY</p><h3>Verification runs</h3></div><span className="subtle">{runs.length ? "Live API results" : "No runs available"}</span></div>{runs.length ? <div className="run-list">{runs.map((run) => <div className="run" key={run.id}><span className={`status ${run.status}`}/><div><strong>{run.name}</strong><small>{run.id}</small></div><span>{run.finishedAt ?? run.status}</span></div>)}</div> : <Empty text="Runs appear here when /api/verification/runs is available." />}</section></>;
+  return <><section className="hero"><div><p className="eyebrow">实时状态</p><h2>先看清每一条链路，<br />再交给 Agent。</h2><p className="muted">协议、工具、技能、MCP 应用和 Codex 会话都在这里验证。结果来自当前服务，不用静态样例冒充通过。</p></div><div className={`health-card ${health}`}><span className="dot"/><strong>{health === "online" ? "服务可以访问" : health === "checking" ? "正在联系服务" : "服务暂时不可用"}</strong><small>{health === "online" ? "/api/status 已响应" : "还没有收到成功响应"}</small></div></section>
+  <section className="metrics"><Metric label="验证记录" value={String(runs.length)} /><Metric label="已通过" value={String(passed)} /><Metric label="运行中" value={String(active)} /><Metric label="传输状态" value={health === "online" ? "在线" : "—"} /></section>
+  <section className="panel"><div className="panel-head"><div><p className="eyebrow">最近执行</p><h3>会话验证记录</h3></div><span className="subtle">{runs.length ? "实时 API 结果" : "暂无记录"}</span></div>{runs.length ? <div className="run-list">{runs.map((run) => <div className="run" key={run.id}><span className={`status ${run.status}`}/><div><strong>{run.name}</strong><small>{run.id}</small></div><span>{run.finishedAt ?? run.status}</span></div>)}</div> : <Empty text="服务返回 /api/verification/runs 后，执行记录会显示在这里。" />}</section></>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) { return <article className="metric"><p>{label}</p><strong>{value}</strong></article>; }
 function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
 
-function Protocol() { return <section className="panel"><div className="panel-head"><div><p className="eyebrow">JSON-RPC LIFECYCLE</p><h3>Protocol checkpoints</h3></div><span className="badge">MCP</span></div><div className="table">{protocolRows.map(([event, evidence, state]) => <div className="row" key={event}><code>{event}</code><span>{evidence}</span><span className="badge">{state}</span></div>)}</div><p className="muted protocol-note">These checks describe expected evidence; their live result comes from the backend verification feed.</p></section>; }
+function Protocol() { return <section className="panel"><div className="panel-head"><div><p className="eyebrow">JSON-RPC 生命周期</p><h3>协议检查点</h3></div><span className="badge">MCP</span></div><div className="table">{protocolRows.map(([event, evidence, state]) => <div className="row" key={event}><code>{event}</code><span>{evidence}</span><span className="badge">{state}</span></div>)}</div><p className="muted protocol-note">这里列出预期证据，实际结果以服务端验证记录为准。</p></section>; }
 
 function Catalog({ title, items, endpoint }: { title: string; items: string[]; endpoint: string }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   useEffect(() => { let current = true; void fetch(endpoint, { headers: { accept: "application/json" } }).then((response) => { if (current) setAvailable(response.ok); }).catch(() => { if (current) setAvailable(false); }); return () => { current = false; }; }, [endpoint]);
-  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">DISCOVERY</p><h3>{title}</h3></div><code>{endpoint}</code></div><div className="catalog">{items.map((item) => <article key={item}><span className="terminal">⌘</span><div><strong>{item}</strong><p>Awaiting server-provided detail</p></div><span className="badge">demo</span></article>)}</div><p className="muted protocol-note">{available === true ? "Demo endpoint responded; entries remain explicitly marked as demo." : available === false ? "Demo endpoint unavailable — no server result is being shown." : "Checking demo endpoint…"}</p></section>;
+  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">能力发现</p><h3>{title}</h3></div><code>{endpoint}</code></div><div className="catalog">{items.map((item) => <article key={item}><span className="terminal">⌘</span><div><strong>{item}</strong><p>等待服务端返回详细定义</p></div><span className="badge">实验</span></article>)}</div><p className="muted protocol-note">{available === true ? "实验端点已响应，条目仍明确标记为实验数据。" : available === false ? "实验端点不可用，页面没有伪造服务端结果。" : "正在检查实验端点…"}</p></section>;
 }
 
 function McpApps() {
@@ -111,7 +136,7 @@ function McpApps() {
     resource: { uri: string; mimeType?: string; text: string };
     toolResult: { structuredContent?: unknown };
   } | null>(null);
-  const [message, setMessage] = useState("Resolving Tool → ui:// Resource…");
+  const [message, setMessage] = useState("正在解析工具与 ui:// 资源…");
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -135,14 +160,14 @@ function McpApps() {
           id: rpc.id,
           result: { protocolVersion: "2026-01-26", hostInfo: { name: "mcp-v2-visual-host", version: "0.1.0" }, hostCapabilities: {} },
         }, "*");
-        setMessage("MCP Apps bridge initialized");
+        setMessage("MCP Apps 通信桥已初始化");
       } else if (rpc.method === "ui/notifications/initialized") {
         frameRef.current?.contentWindow?.postMessage({
           jsonrpc: "2.0",
           method: "ui/notifications/tool-result",
           params: app?.toolResult ?? {},
         }, "*");
-        setMessage("Tool result delivered to ui:// resource");
+        setMessage("工具结果已送达 ui:// 资源");
       } else if (rpc.method === "tools/call" && typeof rpc.id === "number") {
         const params = rpc.params as { name?: unknown; arguments?: unknown } | undefined;
         const response = await fetch("/api/mcp-app/call", {
@@ -158,18 +183,18 @@ function McpApps() {
           ? params.arguments as { view?: unknown; status?: unknown }
           : {};
         setMessage(response.ok
-          ? `Widget called orders.dashboard(view=${String(args.view ?? "overview")}, status=${String(args.status ?? "all")}) through host`
-          : "Widget tool call failed");
+          ? `组件已通过宿主调用 orders.dashboard（view=${String(args.view ?? "overview")}，status=${String(args.status ?? "all")}）`
+          : "组件调用工具失败");
       }
     };
     window.addEventListener("message", listener);
     return () => window.removeEventListener("message", listener);
   }, [app]);
 
-  return <section className="apps-grid"><div className="panel bridge"><p className="eyebrow">REAL MCP APPS CHAIN</p><h3>Tool-linked sandbox resource</h3><p className="muted">The host discovers tool metadata, reads the ui:// resource over MCP, then delivers the tool result over the JSON-RPC postMessage bridge.</p><div className="bridge-event"><span className="dot checking"/>{message}</div><code>{app?.descriptor._meta?.ui?.resourceUri ?? "ui:// resolving"}</code><code>{app?.resource.mimeType ?? "MIME resolving"}</code></div>{app && <iframe ref={frameRef} title="MCP App orders dashboard" sandbox="allow-scripts" srcDoc={app.resource.text} />}</section>;
+  return <section className="apps-grid"><div className="panel bridge"><p className="eyebrow">真实 MCP Apps 链路</p><h3>工具关联的沙箱资源</h3><p className="muted">宿主先发现工具元数据，再通过 MCP 读取 ui:// 资源，最后经 JSON-RPC postMessage 把工具结果交给界面。</p><div className="bridge-event"><span className="dot checking"/>{message}</div><code>{app?.descriptor._meta?.ui?.resourceUri ?? "正在解析 ui://"}</code><code>{app?.resource.mimeType ?? "正在解析 MIME"}</code></div>{app && <iframe ref={frameRef} title="MCP App 订单看板" sandbox="allow-scripts" srcDoc={app.resource.text} />}</section>;
 }
 
 function Session({ runs }: { runs: Run[] }) {
   const latest = runs[0];
-  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">AGENT TRACE</p><h3>Codex session</h3></div><span className="badge">{latest?.status ?? "read-only"}</span></div><div className="timeline"><div><b>01</b><span>Discover server capabilities</span></div><div><b>02</b><span>Run bounded verification through the real MCP client</span></div><div><b>03</b><span>{runs.length ? `${runs.length} backend run records received` : "Awaiting backend run records"}</span></div>{latest?.steps?.map((step, index) => <div key={step}><b>{String(index + 4).padStart(2, "0")}</b><span>{step}</span></div>)}</div><p className="muted protocol-note">{latest === undefined ? "Session records remain unavailable until the service exposes them; this screen never manufactures an execution trace." : `Latest run ${latest.id} is ${latest.status}.`}</p></section>;
+  return <section className="panel"><div className="panel-head"><div><p className="eyebrow">Agent 执行轨迹</p><h3>Codex 会话</h3></div><span className="badge">{latest?.status ?? "只读"}</span></div><div className="timeline"><div><b>01</b><span>发现服务端能力</span></div><div><b>02</b><span>通过真实 MCP 客户端运行限定范围的验证</span></div><div><b>03</b><span>{runs.length ? `已收到 ${runs.length} 条后端执行记录` : "等待后端执行记录"}</span></div>{latest?.steps?.map((step, index) => <div key={step}><b>{String(index + 4).padStart(2, "0")}</b><span>{step}</span></div>)}</div><p className="muted protocol-note">{latest === undefined ? "服务公开会话记录后才会显示在这里，页面不会编造执行轨迹。" : `最近一次执行 ${latest.id}，状态为 ${latest.status}。`}</p></section>;
 }

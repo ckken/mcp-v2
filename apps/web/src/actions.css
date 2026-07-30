@@ -3,27 +3,7 @@
   gap: 8px;
 }
 
-.ghost {
-  border: 1px solid #383b50;
-  border-radius: 8px;
-  background: transparent;
-  color: #c9cce0;
-  padding: 10px 14px;
-  font-weight: 750;
-  cursor: pointer;
-}
-
-.ghost:disabled {
-  opacity: 0.6;
-}
-
-@media (max-width: 540px) {
-  .actions {
-    align-items: stretch;
-    flex-direction: column-reverse;
-  }
-
-  .actions button {
-    padding: 8px 10px;
-  }
+@media (max-width: 520px) {
+  .actions { align-items: stretch; }
+  .actions button { padding-inline: 12px; }
 }

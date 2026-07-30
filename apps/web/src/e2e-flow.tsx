@@ -46,12 +46,12 @@ const scenes: Array<{
   copy: string;
   position: { x: number; y: number };
 }> = [
-  { group: "Protocol", index: "01", signal: "HANDSHAKE", copy: "Modern + stateless", position: { x: 30, y: 36 } },
-  { group: "Discovery", index: "02", signal: "RADAR", copy: "Tools + resource", position: { x: 400, y: 0 } },
-  { group: "Tools", index: "03", signal: "TOOL CALL", copy: "Inputs + outputs", position: { x: 790, y: 56 } },
-  { group: "Skills", index: "04", signal: "SKILL RUN", copy: "Discover + execute", position: { x: 820, y: 410 } },
-  { group: "Verification", index: "05", signal: "EVIDENCE", copy: "Confirm + reject", position: { x: 420, y: 492 } },
-  { group: "MCP Apps", index: "06", signal: "UI BRIDGE", copy: "Resource + metadata", position: { x: 34, y: 404 } },
+  { group: "Protocol", index: "01", signal: "协议握手", copy: "现代协议与无状态回退", position: { x: 30, y: 36 } },
+  { group: "Discovery", index: "02", signal: "能力发现", copy: "工具与资源", position: { x: 400, y: 0 } },
+  { group: "Tools", index: "03", signal: "工具调用", copy: "输入与输出", position: { x: 790, y: 56 } },
+  { group: "Skills", index: "04", signal: "技能运行", copy: "发现与执行", position: { x: 820, y: 410 } },
+  { group: "Verification", index: "05", signal: "验证证据", copy: "确认与拒绝", position: { x: 420, y: 492 } },
+  { group: "MCP Apps", index: "06", signal: "界面通信", copy: "资源与元数据", position: { x: 34, y: 404 } },
 ];
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -75,12 +75,12 @@ function SceneCard({ data }: NodeProps<SceneNode>) {
 }
 
 function RunnerCore({ data }: NodeProps<CoreNode>) {
-  return <article className={`runner-core runner-core-${data.state}`} aria-label="E2E case runner">
+  return <article className={`runner-core runner-core-${data.state}`} aria-label="E2E 用例运行器">
     <Handle type="target" position={Position.Left} />
     <div className="runner-rings"><i /><i /><i /></div>
     <div className="runner-scan" />
     <div className="runner-copy">
-      <span>LIVE E2E // CASE STREAM</span>
+      <span>实时 E2E 用例流</span>
       <strong>{data.currentId}</strong>
       <p>{data.currentTitle}</p>
       <small>{data.progress}</small>
@@ -165,9 +165,9 @@ function ScenarioFlow({
         position: { x: 390, y: 212 },
         data: {
           state: coreState,
-          currentId: activeCase?.id ?? (report === null ? "WAITING" : "COMPLETE"),
-          currentTitle: activeCase?.title ?? (report === null ? "连接真实 MCP Client" : `${report.passed} cases verified`),
-          progress: activeCase === undefined ? "20 cases · 6 scenes" : `${String(activeCaseIndex + 1).padStart(2, "0")} / ${playbackReport?.total ?? 20}`,
+          currentId: activeCase?.id ?? (report === null ? "等待运行" : "执行完成"),
+          currentTitle: activeCase?.title ?? (report === null ? "连接真实 MCP 客户端" : `${report.passed} 条用例已验证`),
+          progress: activeCase === undefined ? `${sourceReport?.total ?? "—"} 条用例 · 6 个场景` : `${String(activeCaseIndex + 1).padStart(2, "0")} / ${playbackReport?.total ?? "—"}`,
         },
       },
     ];
@@ -211,7 +211,7 @@ function ScenarioFlow({
       <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(112, 179, 255, .17)" />
       <Controls showInteractive={false} position="bottom-right" />
     </ReactFlow>
-    <div className="scenario-coordinate">STREAMABLE HTTP // JSON ONLY // LIVE REPORT</div>
+    <div className="scenario-coordinate">Streamable HTTP · JSON · 实时报告</div>
   </div>;
 }
 
@@ -293,7 +293,7 @@ export function E2eFlowLab() {
         throw new Error(typeof payload.error === "string" ? payload.error : `HTTP ${response.status}`);
       }
       const next = asE2eReport(await response.json());
-      if (next === null) throw new Error("E2E report contract is invalid");
+      if (next === null) throw new Error("E2E 报告格式无效");
       setPlaybackReport(next);
       for (let index = 0; index < next.cases.length; index += 1) {
         const item = next.cases[index];
@@ -308,14 +308,14 @@ export function E2eFlowLab() {
       setActiveCaseIndex(-1);
       setSelected(next.cases.find((item) => item.status === "failed")?.group ?? "Protocol");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "E2E suite failed");
+      setError(cause instanceof Error ? cause.message : "E2E 验收失败");
     } finally {
       setRunning(false);
     }
   };
 
   useEffect(() => {
-    void loadLatest().catch((cause) => setError(cause instanceof Error ? cause.message : "E2E report unavailable"));
+    void loadLatest().catch((cause) => setError(cause instanceof Error ? cause.message : "E2E 报告不可用"));
   }, []);
 
   const sourceReport = report ?? playbackReport;
@@ -325,29 +325,30 @@ export function E2eFlowLab() {
     ? 0
     : Math.max(0, new Date(report.finishedAt).getTime() - new Date(report.startedAt).getTime());
   const activeCase = playbackReport?.cases[activeCaseIndex];
+  const totalCases = sourceReport?.total ?? 0;
 
   return <div className="e2e-experience">
     <section className="case-hero">
       <div className="case-hero-copy">
-        <p className="flow-overline"><span /> CASE PULSE // LIVE ACCEPTANCE</p>
-        <h2>让每一个用例<br /><em>都能被看见</em></h2>
-        <p>真实报告返回后，二十条用例逐一经过队列、执行与结论状态。每一次点亮都对应服务端证据，不播放预设 PASS。</p>
+        <p className="flow-overline"><span /> 逐条回放 · 实时验收</p>
+        <h2>{totalCases || "全部"} 个用例，<br /><em>逐条看清楚。</em></h2>
+        <p>运行后，页面按服务端返回的顺序播放每个结果。没有预设的通过状态，也不会跳过失败项。</p>
         <div className="case-hero-actions">
           <button className="case-run-button" aria-label="运行全部 E2E" disabled={running} onClick={() => void runAll()}>
             <span className="case-run-icon">{running ? "···" : "▶"}</span>
-            <span><small>{running ? "CASE STREAM ACTIVE" : "START LIVE SUITE"}</small>{running ? `正在呈现 ${activeCaseIndex < 0 ? "连接" : `${activeCaseIndex + 1}/20`}` : "运行并呈现 20 个用例"}</span>
+            <span><small>{running ? "正在接收服务端结果" : "真实接口 · 完整链路"}</small>{running ? `正在运行 ${activeCaseIndex < 0 ? "连接" : `${activeCaseIndex + 1}/${totalCases || "—"}`}` : "运行全部用例"}</span>
           </button>
-          <span className="case-live-note"><i /> REAL REPORT<br />CASE BY CASE</span>
+          <span className="case-live-note"><i /> 真实报告<br />逐条呈现</span>
         </div>
       </div>
-      <div className="case-hero-visual" aria-label="20 case animated matrix">
+      <div className="case-hero-visual" aria-label={`${totalCases || "全部"} 条用例动效矩阵`}>
         <div className="case-matrix-core">
-          <span>LIVE</span>
-          <strong>{activeCaseIndex < 0 ? "20" : String(activeCaseIndex + 1).padStart(2, "0")}</strong>
-          <small>E2E CASES</small>
+          <span>实时</span>
+          <strong>{activeCaseIndex < 0 ? totalCases || "—" : String(activeCaseIndex + 1).padStart(2, "0")}</strong>
+          <small>E2E 用例</small>
         </div>
         <div className="case-matrix-orbit">
-          {Array.from({ length: 20 }, (_, index) => <i key={index} style={{ "--slot": index } as CSSProperties}>{String(index + 1).padStart(2, "0")}</i>)}
+          {Array.from({ length: totalCases }, (_, index) => <i key={index} style={{ "--slot": index, "--case-total": totalCases } as CSSProperties}>{String(index + 1).padStart(2, "0")}</i>)}
         </div>
         <div className="case-radar case-radar-one" />
         <div className="case-radar case-radar-two" />
@@ -359,7 +360,7 @@ export function E2eFlowLab() {
     <section className="scenario-board">
       <header className="scenario-board-head">
         <div>
-          <p className="flow-overline"><span /> SCENARIO FLOW</p>
+          <p className="flow-overline"><span /> 场景链路</p>
           <h3>全链路 E2E 验收</h3>
         </div>
         <div className="flow-legend">
@@ -379,9 +380,9 @@ export function E2eFlowLab() {
 
     {sourceReport !== null && <section className="case-playback" data-testid="case-playback">
       <header>
-        <div><p className="flow-overline"><span /> 20 CASE PLAYBACK</p><h3>逐用例执行轨迹</h3></div>
+        <div><p className="flow-overline"><span /> {sourceReport.total} 条用例回放</p><h3>逐条执行轨迹</h3></div>
         <div className="playback-now">
-          <span>{activeCaseIndex < 0 ? "COMPLETE" : "RUNNING"}</span>
+          <span>{activeCaseIndex < 0 ? "已完成" : "运行中"}</span>
           <strong>{activeCase?.id ?? `${sourceReport.passed}/${sourceReport.total}`}</strong>
         </div>
       </header>
@@ -414,25 +415,25 @@ export function E2eFlowLab() {
     </nav>
 
     {report === null ? <section className="scene-inspector scene-empty">
-      <span className="scene-empty-mark">{running ? "▶" : "20"}</span>
+      <span className="scene-empty-mark">{running ? "▶" : totalCases || "—"}</span>
       <div>
-        <p className="flow-overline"><span /> {running ? "LIVE CASE PLAYBACK" : "WAITING FOR RUN"}</p>
+        <p className="flow-overline"><span /> {running ? "实时回放" : "等待运行"}</p>
         <h3>{running ? activeCase === undefined ? "正在连接真实 MCP Client" : `正在呈现 ${activeCase.id}` : "还没有本轮执行记录"}</h3>
         <p>{running
           ? <>当前仅呈现服务端已经返回的真实用例结果；播放结束后才生成汇总结论。</>
-          : <>点击“运行并呈现 20 个用例”，页面会调用真实的 <code>POST /api/e2e/run</code>。</>}</p>
+          : <>点击“运行全部用例”，页面会调用真实的 <code>POST /api/e2e/run</code>。</>}</p>
       </div>
     </section> : <>
       <section className={`flow-verdict ${report.status}`} aria-label="E2E summary">
-        <div className="flow-verdict-stamp"><span>{report.status === "passed" ? "CLEAR" : "ALERT"}</span><strong>{report.passed}</strong><small>/ {report.total}</small></div>
+        <div className="flow-verdict-stamp"><span>{report.status === "passed" ? "通过" : "异常"}</span><strong>{report.passed}</strong><small>/ {report.total}</small></div>
         <div>
-          <p className="flow-overline"><span /> LATEST RUN</p>
+          <p className="flow-overline"><span /> 最近一次运行</p>
           <h2>{report.status === "passed" ? `${report.total} 个用例全部通过` : `${report.failed} 个用例失败`}</h2>
           <p>{report.runId} · MCP {report.protocolVersion} · {elapsed}ms</p>
         </div>
         <div className="flow-verdict-counters">
-          <span><small>SCENES</small><strong>06</strong></span>
-          <span><small>FAILED</small><strong>{String(report.failed).padStart(2, "0")}</strong></span>
+          <span><small>场景</small><strong>06</strong></span>
+          <span><small>失败</small><strong>{String(report.failed).padStart(2, "0")}</strong></span>
         </div>
       </section>
 
