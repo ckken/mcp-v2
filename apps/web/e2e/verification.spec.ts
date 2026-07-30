@@ -16,7 +16,24 @@ test("runs a real v2-first verification and renders its evidence", async ({ page
   await expect(statusResponse.json()).resolves.toMatchObject({
     protocolVersion: "2026-07-28",
     legacy: "stateless",
-    sse: false,
+    legacyProtocolVersion: "2025-06-18",
+    transport: "streamable-http",
+    responseFraming: {
+      modern: "application/json",
+      legacy: "text/event-stream",
+    },
+    standaloneSseEndpoint: false,
+    subscriptions: false,
+    capabilities: {
+      tools: true,
+      resources: true,
+      prompts: false,
+      skills: true,
+      apps: true,
+      tasks: false,
+      auth: false,
+      verification: true,
+    },
   });
 });
 

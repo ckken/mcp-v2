@@ -19,6 +19,20 @@ type ToolResult = {
   _meta?: Record<string, unknown>;
 };
 
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: true,
+} as const;
+
+const STATEFUL_ANNOTATIONS = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: false,
+} as const;
+
 function result(value: unknown, meta?: Record<string, unknown>): ToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(value) }],
@@ -43,7 +57,15 @@ function tool<T extends object>(name: string, handler: (args: T) => unknown, res
 }
 
 export function createDemoMcpServer() {
-  const server = new McpServer({ name: "mcp-v2-demo", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "mcp-v2-demo", version: "0.1.0" },
+    {
+      capabilities: {
+        tools: { listChanged: false },
+        resources: { listChanged: false },
+      },
+    },
+  );
   server.registerResource(
     "orders-dashboard-app",
     ORDERS_APP_URI,
@@ -66,8 +88,24 @@ export function createDemoMcpServer() {
       }],
     }),
   );
-  server.registerTool("system.health", { description: "Return v2-first server health", inputSchema: z.object({ runId: z.string().optional() }) }, tool("system.health", () => ({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false })));
-  server.registerTool("orders.search", { description: "Search demo orders", inputSchema: z.object({ query: z.string().optional(), runId: z.string().optional() }) }, tool("orders.search", ({ query }) => ({ orders: listOrders(query) })));
+  server.registerTool("system.health", {
+    description: "Return v2-first server health",
+    inputSchema: z.object({ runId: z.string().optional() }),
+    annotations: READ_ONLY_ANNOTATIONS,
+  }, tool("system.health", () => ({
+    ok: true,
+    protocolVersion: MODERN_PROTOCOL_VERSION,
+    transport: "streamable-http",
+    legacy: "stateless",
+    responseFraming: { modern: "application/json", legacy: "text/event-stream" },
+    standaloneSseEndpoint: false,
+    subscriptions: false,
+  })));
+  server.registerTool("orders.search", {
+    description: "Search demo orders",
+    inputSchema: z.object({ query: z.string().optional(), runId: z.string().optional() }),
+    annotations: READ_ONLY_ANNOTATIONS,
+  }, tool("orders.search", ({ query }) => ({ orders: listOrders(query) })));
   server.registerTool(
     "orders.dashboard",
     {
@@ -78,7 +116,7 @@ export function createDemoMcpServer() {
         status: z.enum(["all", "paid", "pending", "fulfilled"]).default("all").describe("Order status filter"),
         query: z.string().optional().describe("Optional demo order search term"),
       }),
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+      annotations: READ_ONLY_ANNOTATIONS,
       _meta: {
         ui: { resourceUri: ORDERS_APP_URI },
         "ui/resourceUri": ORDERS_APP_URI,
@@ -104,7 +142,7 @@ export function createDemoMcpServer() {
     {
       description: "Discover demo application skills",
       inputSchema: z.object({ runId: z.string().optional() }),
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+      annotations: READ_ONLY_ANNOTATIONS,
     },
     tool("skills.discover", () => ({ skills: discoverSkills() })),
   );
@@ -113,17 +151,28 @@ export function createDemoMcpServer() {
     {
       description: "Run a read-only demo application skill",
       inputSchema: z.object({ skillId: z.string(), orderId: z.string().optional(), runId: z.string().optional() }),
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+      annotations: READ_ONLY_ANNOTATIONS,
     },
     tool("skills.run", ({ skillId, orderId }) => runSkill(skillId, orderId)),
   );
-  server.registerTool("verification.start", { description: "Start a desensitized verification run" }, tool("verification.start", () => startVerification()));
-  server.registerTool("verification.status", { description: "Read a verification run", inputSchema: z.object({ runId: z.string() }) }, tool("verification.status", ({ runId }) => {
+  server.registerTool("verification.start", {
+    description: "Start a desensitized verification run",
+    annotations: STATEFUL_ANNOTATIONS,
+  }, tool("verification.start", () => startVerification()));
+  server.registerTool("verification.status", {
+    description: "Read a verification run",
+    inputSchema: z.object({ runId: z.string() }),
+    annotations: READ_ONLY_ANNOTATIONS,
+  }, tool("verification.status", ({ runId }) => {
     const run = statusVerification(runId);
     if (run === undefined) throw new Error("Unknown verification run");
     return run;
   }));
-  server.registerTool("verification.finish", { description: "Finish a verification run after human confirmation", inputSchema: z.object({ runId: z.string(), confirmed: z.boolean() }) }, tool("verification.finish", ({ runId, confirmed }) => finishVerification(runId, confirmed)));
+  server.registerTool("verification.finish", {
+    description: "Finish a verification run after human confirmation",
+    inputSchema: z.object({ runId: z.string(), confirmed: z.boolean() }),
+    annotations: STATEFUL_ANNOTATIONS,
+  }, tool("verification.finish", ({ runId, confirmed }) => finishVerification(runId, confirmed)));
   return server;
 }
 

@@ -6,13 +6,22 @@ import type { VerificationRun } from "./verification.ts";
 export const fixtureTimestamp = "2026-07-29T00:00:00.000Z";
 
 export const capabilityFixture: CapabilityMatrix = {
-  tools: true, resources: true, prompts: true, skills: true,
-  apps: true, tasks: true, auth: true, verification: true,
+  tools: true, resources: true, prompts: false, skills: true,
+  apps: true, tasks: false, auth: false, verification: true,
 };
 
 export const serviceHealthFixture: ServiceHealth = {
   status: "healthy",
-  protocol: { version: "2026-07-28", modernOnly: false, legacy: "stateless", transport: "json-http", sse: false },
+  protocol: {
+    version: "2026-07-28",
+    modernOnly: false,
+    legacy: "stateless",
+    legacyVersion: "2025-06-18",
+    transport: "streamable-http",
+    responseFraming: { modern: "application/json", legacy: "text/event-stream" },
+    standaloneSseEndpoint: false,
+    subscriptions: false,
+  },
   capabilities: capabilityFixture,
   checkedAt: fixtureTimestamp,
 };

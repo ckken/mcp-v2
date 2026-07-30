@@ -1,4 +1,16 @@
 export const MODERN_PROTOCOL_VERSION = "2026-07-28";
+export const LEGACY_PROTOCOL_VERSION = "2025-06-18";
+
+export const RUNTIME_CAPABILITIES = {
+  tools: true,
+  resources: true,
+  prompts: false,
+  skills: true,
+  apps: true,
+  tasks: false,
+  auth: false,
+  verification: true,
+} as const;
 
 export type EvidenceStatus = "started" | "passed" | "failed";
 

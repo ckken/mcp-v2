@@ -50,7 +50,10 @@ type RpcResult = { structuredContent?: DashboardData };
 type PendingRequest = {
   resolve: (result: RpcResult) => void;
   reject: (error: Error) => void;
+  timeoutId: number;
 };
+
+const HOST_REQUEST_TIMEOUT_MS = 10_000;
 
 const statusLabels: Record<OrderStatus, string> = {
   all: "All statuses",
@@ -69,16 +72,22 @@ function useMcpApp() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const idRef = useRef(0);
   const pendingRef = useRef(new Map<number, PendingRequest>());
 
   const request = useCallback((method: string, params: unknown) => new Promise<RpcResult>((resolve, reject) => {
     const id = ++idRef.current;
-    pendingRef.current.set(id, { resolve, reject });
+    const timeoutId = window.setTimeout(() => {
+      pendingRef.current.delete(id);
+      reject(new Error(`MCP host did not answer ${method} within ${HOST_REQUEST_TIMEOUT_MS / 1000}s`));
+    }, HOST_REQUEST_TIMEOUT_MS);
+    pendingRef.current.set(id, { resolve, reject, timeoutId });
     window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
   }), []);
 
   useEffect(() => {
+    let mounted = true;
     const onMessage = (event: MessageEvent<unknown>) => {
       if (event.source !== window.parent || !event.data || typeof event.data !== "object") return;
       const message = event.data as {
@@ -94,6 +103,7 @@ function useMcpApp() {
         const pending = pendingRef.current.get(message.id);
         if (!pending) return;
         pendingRef.current.delete(message.id);
+        window.clearTimeout(pending.timeoutId);
         if (message.error) pending.reject(new Error(message.error.message ?? "MCP host call failed"));
         else pending.resolve(message.result ?? {});
         return;
@@ -109,28 +119,39 @@ function useMcpApp() {
       appCapabilities: {},
       protocolVersion: "2026-01-26",
     }).then(() => {
+      if (!mounted) return;
       setConnected(true);
+      setError(null);
       window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
+    }).catch((initializeError: unknown) => {
+      if (mounted) setError(initializeError instanceof Error ? initializeError.message : "MCP host initialization failed");
     });
 
     return () => {
+      mounted = false;
       window.removeEventListener("message", onMessage);
-      for (const pending of pendingRef.current.values()) pending.reject(new Error("MCP App unmounted"));
+      for (const pending of pendingRef.current.values()) {
+        window.clearTimeout(pending.timeoutId);
+        pending.reject(new Error("MCP App unmounted"));
+      }
       pendingRef.current.clear();
     };
   }, [request]);
 
   const update = useCallback(async (parameters: { view: DashboardView; status: OrderStatus }) => {
     setLoading(true);
+    setError(null);
     try {
       const result = await request("tools/call", { name: "orders.dashboard", arguments: parameters });
       if (result.structuredContent) setData(result.structuredContent);
+    } catch (toolError) {
+      setError(toolError instanceof Error ? toolError.message : "MCP host tool call failed");
     } finally {
       setLoading(false);
     }
   }, [request]);
 
-  return { data, connected, loading, update };
+  return { data, connected, loading, error, update };
 }
 
 function MetricCard({
@@ -246,7 +267,7 @@ function Status({ data }: { data: DashboardData }) {
 }
 
 export function App() {
-  const { data, connected, loading, update } = useMcpApp();
+  const { data, connected, loading, error, update } = useMcpApp();
   const view = data?.parameters.view ?? "overview";
   const status = data?.parameters.status ?? "all";
 
@@ -289,6 +310,12 @@ export function App() {
             </Button>
           </div>
         </header>
+
+        {error !== null && (
+          <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Host connection issue: {error}
+          </div>
+        )}
 
         {data ? (
           <Tabs

@@ -1,4 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { LEGACY_PROTOCOL_VERSION, MODERN_PROTOCOL_VERSION, RUNTIME_CAPABILITIES } from "./domain.ts";
 
 export type E2eCaseGroup = "Protocol" | "Discovery" | "Tools" | "Skills" | "Verification" | "MCP Apps";
 
@@ -17,7 +18,7 @@ export interface E2eReport {
   readonly status: "passed" | "failed";
   readonly startedAt: string;
   readonly finishedAt: string;
-  readonly protocolVersion: "2026-07-28";
+  readonly protocolVersion: typeof MODERN_PROTOCOL_VERSION;
   readonly total: number;
   readonly passed: number;
   readonly failed: number;
@@ -41,7 +42,10 @@ function structured<T>(result: ToolCallResult): T {
 function createClient(name: string, mode: "modern" | "legacy") {
   return new Client(
     { name, version: "0.1.0" },
-    { versionNegotiation: { mode: mode === "modern" ? { pin: "2026-07-28" } : "legacy" } },
+    {
+      supportedProtocolVersions: [mode === "modern" ? MODERN_PROTOCOL_VERSION : LEGACY_PROTOCOL_VERSION],
+      versionNegotiation: { mode: mode === "modern" ? { pin: MODERN_PROTOCOL_VERSION } : "legacy" },
+    },
   );
 }
 
@@ -93,26 +97,45 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
   };
 
   try {
-    await add("protocol.json-http", "Protocol", "JSON HTTP，不使用 SSE", async () => {
+    await add("protocol.json-http", "Protocol", "按时代验证响应封装", async () => {
       const response = await fetch(new URL("/api/status", mcpUrl), { headers: { accept: "application/json" } });
       const contentType = response.headers.get("content-type") ?? "";
-      const value = await response.json() as { protocolVersion?: string; transport?: string; sse?: boolean };
+      const value = await response.json() as {
+        protocolVersion?: string;
+        legacyProtocolVersion?: string;
+        transport?: string;
+        responseFraming?: { modern?: string; legacy?: string };
+        standaloneSseEndpoint?: boolean;
+        subscriptions?: boolean;
+        capabilities?: typeof RUNTIME_CAPABILITIES;
+      };
       assert(response.ok, `Status endpoint returned HTTP ${response.status}`);
       assert(contentType.includes("application/json"), "Status endpoint is not JSON");
-      assert(!contentType.includes("text/event-stream") && value.sse === false, "SSE must remain disabled");
-      assert(value.protocolVersion === "2026-07-28" && value.transport === "json-http", "Unexpected protocol status");
-      return { detail: "2026-07-28 · application/json · sse=false", evidence: [contentType] };
+      assert(!contentType.includes("text/event-stream"), "Status endpoint must return JSON");
+      assert(value.protocolVersion === MODERN_PROTOCOL_VERSION && value.transport === "streamable-http", "Unexpected protocol status");
+      assert(value.legacyProtocolVersion === LEGACY_PROTOCOL_VERSION, "Unexpected legacy protocol version");
+      assert(value.responseFraming?.modern === "application/json" && value.responseFraming.legacy === "text/event-stream", "Response framing matrix is inaccurate");
+      assert(value.standaloneSseEndpoint === false && value.subscriptions === false, "Unsupported streaming capabilities must remain disabled");
+      assert(JSON.stringify(value.capabilities) === JSON.stringify(RUNTIME_CAPABILITIES), "Runtime capability matrix is inaccurate");
+      return { detail: "Streamable HTTP · modern JSON · legacy SSE framing", evidence: [contentType, `legacy=${LEGACY_PROTOCOL_VERSION}`, "standalone-sse=false"] };
     });
 
     await add("protocol.modern", "Protocol", "Modern Client 握手", async () => {
       modern = createClient("e2e-modern-client", "modern");
       await modern.connect(new StreamableHTTPClientTransport(mcpUrl));
-      return { detail: "Client pinned to 2026-07-28", evidence: ["versionNegotiation=2026-07-28"] };
+      assert(modern.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "Modern Client negotiated the wrong protocol version");
+      assert(modern.getProtocolEra() === "modern", "Modern Client did not enter the modern era");
+      const capabilities = modern.getDiscoverResult()?.capabilities;
+      assert(capabilities?.tools?.listChanged === false, "Server must not advertise unimplemented Tool subscriptions");
+      assert(capabilities.resources?.listChanged === false, "Server must not advertise unimplemented Resource subscriptions");
+      return { detail: "Client pinned and negotiated to 2026-07-28", evidence: ["era=modern", `version=${MODERN_PROTOCOL_VERSION}`, "subscriptions=false"] };
     });
 
     await add("protocol.legacy", "Protocol", "旧 Codex stateless fallback", async () => {
       legacy = createClient("e2e-legacy-client", "legacy");
       await legacy.connect(new StreamableHTTPClientTransport(mcpUrl));
+      assert(legacy.getNegotiatedProtocolVersion() === LEGACY_PROTOCOL_VERSION, "Legacy Client negotiated the wrong protocol version");
+      assert(legacy.getProtocolEra() === "legacy", "Legacy Client did not enter the legacy era");
       const result = await legacy.callTool({
         name: "orders.dashboard",
         arguments: { view: "orders", status: "paid" },
@@ -120,7 +143,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
       const value = structured<{ parameters?: { view?: string; status?: string }; orders?: unknown[] }>(result);
       assert(value.parameters?.view === "orders" && value.parameters.status === "paid", "Legacy parameters were not preserved");
       assert(value.orders?.length === 1, "Legacy dashboard did not return one paid order");
-      return { detail: "2025-era Client 可调用参数化 Dashboard", evidence: ["legacy=stateless", "orders=1"] };
+      return { detail: "2025-06-18 Client 可调用参数化 Dashboard", evidence: ["era=legacy", `version=${LEGACY_PROTOCOL_VERSION}`, "orders=1"] };
     });
 
     await add("discovery.tools", "Discovery", "发现全部 8 个 Tool", async () => {
@@ -138,6 +161,16 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
       ];
       for (const name of expected) assert(tools.some((tool) => tool.name === name), `Missing Tool: ${name}`);
       assert(tools.length === expected.length, `Expected ${expected.length} Tools, received ${tools.length}`);
+      for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.status"]) {
+        const annotations = tools.find((tool) => tool.name === name)?.annotations;
+        assert(
+          annotations?.readOnlyHint === true
+            && annotations.destructiveHint === false
+            && annotations.openWorldHint === false
+            && annotations.idempotentHint === true,
+          `${name} must advertise safe read-only annotations`,
+        );
+      }
       return { detail: "8/8 Tool 已发现", evidence: expected };
     });
 
@@ -153,9 +186,20 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
     await add("tool.health", "Tools", "system.health", async () => {
       assert(modern !== undefined, "Modern Client is unavailable");
       const result = await modern.callTool({ name: "system.health", arguments: {} });
-      const value = structured<{ ok?: boolean; protocolVersion?: string; sse?: boolean }>(result);
-      assert(value.ok === true && value.protocolVersion === "2026-07-28" && value.sse === false, "Health payload is invalid");
-      return { detail: "Server online，协议与传输声明一致", evidence: ["ok=true", "sse=false"] };
+      const value = structured<{
+        ok?: boolean;
+        protocolVersion?: string;
+        transport?: string;
+        standaloneSseEndpoint?: boolean;
+      }>(result);
+      assert(
+        value.ok === true
+          && value.protocolVersion === MODERN_PROTOCOL_VERSION
+          && value.transport === "streamable-http"
+          && value.standaloneSseEndpoint === false,
+        "Health payload is invalid",
+      );
+      return { detail: "Server online，协议与传输声明一致", evidence: ["ok=true", "transport=streamable-http", "standalone-sse=false"] };
     });
 
     await add("tool.orders-hit", "Tools", "orders.search 命中", async () => {
@@ -300,7 +344,7 @@ async function executeSuite(mcpUrl: URL): Promise<E2eReport> {
     status: passed === cases.length ? "passed" : "failed",
     startedAt,
     finishedAt: new Date().toISOString(),
-    protocolVersion: "2026-07-28",
+    protocolVersion: MODERN_PROTOCOL_VERSION,
     total: cases.length,
     passed,
     failed: cases.length - passed,

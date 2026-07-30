@@ -4,8 +4,9 @@
 
 使用 Bun workspace 和 Bun 包管理，从零实现一个只支持 MCP `2026-07-28`
 modern era 的可视化 Demo。服务端以 v2 内置 stateless fallback 兼容
-2025-era Streamable HTTP Client，但不提供 legacy SSE
-端点，不实现 `subscriptions/listen`。前端使用 Rsbuild 2、React 19 和
+2025-era Streamable HTTP Client。modern 请求固定返回 JSON；legacy
+stateless POST 结果使用 SDK 的 SSE 响应帧，但不提供独立 legacy SSE
+端点，也不实现 `subscriptions/listen`。前端使用 Rsbuild 2、React 19 和
 TypeScript 7。
 
 第一交付优先级是：
@@ -21,8 +22,9 @@ TypeScript 7。
   `@modelcontextprotocol/sdk` 或 `server-legacy`。
 - v2 Client 固定 `2026-07-28`；Server 使用 `legacy: "stateless"`，
   并以 `2025-06-18` Client 做独立兼容验收。
-- 所有 Demo MCP 请求使用 JSON HTTP；验收必须断言未出现
-  `text/event-stream`。
+- modern Demo MCP 结果使用 JSON；验收必须断言 modern 路径未出现
+  `text/event-stream`，并独立断言 legacy stateless 路径真实经过 SSE
+  响应帧。
 - MCP Apps 使用 `ui://` Resource、sandbox iframe 和最小
   `postMessage` bridge；在官方 helper 兼容 v2 前不引入其 v1 peer。
 - Skills 是应用层能力模型，由 Resource、Prompt、Tool、Workflow 和
@@ -43,7 +45,8 @@ tests/e2e         真实浏览器验收
 前端必须由真实请求驱动，不允许硬编码通过状态。主要页面：
 
 - 总览：服务状态、v2-first、功能矩阵、最近验收。
-- Protocol：discover、capability、headers、JSON-only、stateless fallback。
+- Protocol：discover、capability、headers、modern JSON、legacy SSE framing、
+  stateless fallback。
 - Tools：Schema 表单、调用结果、错误和耗时。
 - Resources / Prompts：列表、读取、缓存、模板和参数。
 - Multi-round：`inputRequired` 确认、拒绝和重入。
@@ -89,7 +92,7 @@ bun run acceptance
 - MCP HTTP 集成验证通过。
 - 浏览器可视化验证通过。
 - v2 `2026-07-28` 与 legacy `2025-06-18` stateless 验收均通过。
-- 所有 MCP 响应均非 SSE。
+- modern MCP 结果均非 SSE；legacy stateless SSE 响应帧已独立验证。
 - MCP App iframe bridge 通过。
 - 新建 Codex 会话调用链通过。
 

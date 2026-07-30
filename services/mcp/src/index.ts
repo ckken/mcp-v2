@@ -2,7 +2,9 @@ import { mcpHandler } from "./server.ts";
 import {
   type DashboardStatus,
   type DashboardView,
+  LEGACY_PROTOCOL_VERSION,
   MODERN_PROTOCOL_VERSION,
+  RUNTIME_CAPABILITIES,
   discoverSkills,
   listOrders,
   listVerificationRuns,
@@ -47,7 +49,22 @@ export const app = {
       }
     }
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
-    if (url.pathname === "/api/status") return json({ ok: true, protocolVersion: MODERN_PROTOCOL_VERSION, transport: "json-http", legacy: "stateless", sse: false });
+    if (url.pathname === "/api/status") {
+      return json({
+        ok: true,
+        protocolVersion: MODERN_PROTOCOL_VERSION,
+        transport: "streamable-http",
+        legacy: "stateless",
+        legacyProtocolVersion: LEGACY_PROTOCOL_VERSION,
+        responseFraming: {
+          modern: "application/json",
+          legacy: "text/event-stream",
+        },
+        standaloneSseEndpoint: false,
+        subscriptions: false,
+        capabilities: RUNTIME_CAPABILITIES,
+      });
+    }
     if (url.pathname === "/api/mcp-app") {
       try {
         const view = url.searchParams.get("view");

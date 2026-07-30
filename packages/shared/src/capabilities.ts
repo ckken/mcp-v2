@@ -7,8 +7,14 @@ export const protocolSupportSchema = z.object({
   version: z.literal(MODERN_PROTOCOL_VERSION),
   modernOnly: z.literal(false),
   legacy: z.literal("stateless"),
-  transport: z.literal("json-http"),
-  sse: z.literal(false),
+  legacyVersion: z.literal("2025-06-18"),
+  transport: z.literal("streamable-http"),
+  responseFraming: z.object({
+    modern: z.literal("application/json"),
+    legacy: z.literal("text/event-stream"),
+  }).strict(),
+  standaloneSseEndpoint: z.literal(false),
+  subscriptions: z.literal(false),
 }).strict();
 export type ProtocolSupport = z.infer<typeof protocolSupportSchema>;
 

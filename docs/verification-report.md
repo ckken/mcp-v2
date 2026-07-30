@@ -29,8 +29,36 @@
   `all | paid | pending | fulfilled` 状态筛选参数。
 - 浏览器内实际执行 `view=orders, status=paid`，返回并渲染唯一匹配的
   `ord_demo_1001`，桌面与 390px 均通过。
-- JSON HTTP、legacy stateless fallback 和 no-SSE 断言。
+- Streamable HTTP、modern JSON response、legacy stateless SSE 响应帧，
+  以及无独立 SSE endpoint 断言。
 - Codex-oriented MCP Client acceptance。
+
+## 深度兼容审计结论
+
+- modern Client 显式固定并实际协商到 `2026-07-28`；auto Client 在同时支持
+  modern 与 legacy 时会优先选择 `2026-07-28`。
+- legacy Client 同时通过 `supportedProtocolVersions` 与握手结果锁定
+  `2025-06-18`。仅设置 `mode: "legacy"` 会跟随 SDK 默认顺序，当前会协商
+  到 `2025-11-25`，不能作为 `2025-06-18` 兼容证据。
+- 验收会采集 `/mcp` 的真实响应头：modern 成功结果为
+  `application/json`，legacy stateless 成功结果包含
+  `text/event-stream`；没有独立 SSE endpoint。
+- Server 明确把 `tools.listChanged` 与 `resources.listChanged` 设为
+  `false`，避免发现阶段广告未使用的订阅能力。
+- 8 个 Tool 均有与行为一致的安全注解；6 个只读 Tool 明确声明只读、
+  非破坏、闭合世界和幂等。
+- 运行时八类能力中已实现 `tools/resources/skills/apps/verification`，
+  尚未实现 `prompts/tasks/auth`。因此不能宣称完整覆盖 MCP v2 的全部能力。
+- MCP App 宿主请求增加 10 秒超时和可见错误状态，宿主不响应时不再永久停留
+  在 Connecting。
+- 优化后使用本机 Codex CLI `0.145.0` 新建隔离会话
+  `019fb0d1-7dd6-78b2-82b1-25db931e9c98`，直接调用
+  `orders.dashboard(view=orders,status=paid)` 成功，Tool 事件返回
+  `ord_demo_1001`，且原始 `_meta` 包含 `openai/outputTemplate`。CLI 的最终
+  自然语言将该元数据误报为不存在，因此验收以原始 Tool 事件为准。
+- 当前 Codex Desktop task 已能发现并直接调用 `orders.dashboard`，同样返回
+  1 条 `ord_demo_1001`；本次调用没有向验收侧暴露 App/widget 渲染事件，
+  因此 Tool 调用标记通过，Desktop 内嵌 UI 仍保持未验证。
 
 ### E2E Lab
 
@@ -83,6 +111,10 @@
   Streamable HTTP 兼容。
 - Server 改用 `@modelcontextprotocol/server@2` 内置
   `legacy: "stateless"`；没有增加 SSE endpoint。
+- `responseMode: "json"` 仅作用于 modern 请求；SDK 的 legacy
+  stateless fallback 会在相同 `/mcp` POST 端点返回
+  `text/event-stream` 响应帧。这不是独立 SSE endpoint，验收已分别锁定
+  modern JSON 与 legacy SSE framing。
 - SDK 集成验收同时通过现代 `2026-07-28` 与 legacy
   `2025-06-18` Client 的工具发现和 `orders.dashboard` 调用。
 - 回退后的 Codex CLI `0.145.0` 成功发现并调用 `orders.dashboard`；

@@ -12,13 +12,23 @@
 | 实验 | 做法 | 当前结果 |
 | --- | --- | --- |
 | MCP v2 Server | `@modelcontextprotocol/server@2.0.0`，协议版本 `2026-07-28` | 已通过 |
-| 无 SSE 传输 | Streamable HTTP + JSON response | 已通过 |
+| Streamable HTTP | modern 使用 JSON；legacy stateless 使用同端点 SSE 响应帧 | 已通过 |
 | 旧 Codex 兼容 | v2 内置 `legacy: "stateless"`，不安装 `server-legacy` | Codex CLI `0.145.0` 可调用 |
 | Skills | `skills.discover`、`skills.run` | 真实 Codex 会话已通过 |
-| MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过 |
+| MCP App | `ui://` Resource、sandbox、JSON-RPC bridge | Web Host 已通过；Desktop 内嵌 UI 未验收通过 |
 | 参数化 Dashboard | `view`、`status`、`query` 驱动 shadcn/ui 界面 | 桌面浏览器与 390px 已通过 |
-| Codex 会话验收 | 新会话直接调用 Tool，并记录脱敏证据 | 已通过 |
+| Codex 会话验收 | CLI 与当前 Desktop task 直接调用 Tool | 已通过 |
 | Case Pulse E2E | React Flow 场景地图逐条呈现 modern + legacy 的 20 个用例 | 20/20 |
+| Prompts / Tasks / Auth | 尚未注册协议能力或业务实现 | 未实现 |
+
+这里的 legacy SSE 仅指 `2025-06-18` stateless POST 响应的
+`text/event-stream` 封装；项目没有旧式独立 SSE endpoint，也没有实现
+`subscriptions/listen`。`responseMode: "json"` 只约束 `2026-07-28`
+modern 请求，不能据此宣称所有兼容请求都是 JSON 响应。
+
+当前运行时能力矩阵为 `tools/resources/skills/apps/verification=true`，
+`prompts/tasks/auth=false`。这里的 Skills 是 Tool 组合出的应用层能力，
+不是 MCP 核心原生对象。
 
 ## Case Pulse 可视化验收
 

@@ -5,15 +5,33 @@ import {
 } from "../src/index.ts";
 
 describe("shared runtime contracts", () => {
-  test("accepts the v2-first JSON-only compatibility fixture", () => {
-    expect(serviceHealthSchema.parse(serviceHealthFixture).protocol).toEqual({
-      version: "2026-07-28", modernOnly: false, legacy: "stateless", transport: "json-http", sse: false,
+  test("accepts the era-specific v2 compatibility fixture", () => {
+    const health = serviceHealthSchema.parse(serviceHealthFixture);
+    expect(health.protocol).toEqual({
+      version: "2026-07-28",
+      modernOnly: false,
+      legacy: "stateless",
+      legacyVersion: "2025-06-18",
+      transport: "streamable-http",
+      responseFraming: { modern: "application/json", legacy: "text/event-stream" },
+      standaloneSseEndpoint: false,
+      subscriptions: false,
+    });
+    expect(health.capabilities).toEqual({
+      tools: true,
+      resources: true,
+      prompts: false,
+      skills: true,
+      apps: true,
+      tasks: false,
+      auth: false,
+      verification: true,
     });
   });
 
-  test("rejects SSE protocol declarations", () => {
+  test("rejects an unimplemented standalone SSE endpoint", () => {
     expect(serviceHealthSchema.safeParse({
-      ...serviceHealthFixture, protocol: { ...serviceHealthFixture.protocol, sse: true },
+      ...serviceHealthFixture, protocol: { ...serviceHealthFixture.protocol, standaloneSseEndpoint: true },
     }).success).toBeFalse();
   });
 

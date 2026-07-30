@@ -1,5 +1,6 @@
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { Client, type FetchLike, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { app } from "../src/index.ts";
+import { LEGACY_PROTOCOL_VERSION, MODERN_PROTOCOL_VERSION, RUNTIME_CAPABILITIES } from "../src/domain.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -8,17 +9,53 @@ function assert(condition: unknown, message: string): asserts condition {
 async function main() {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch });
   const baseUrl = `http://127.0.0.1:${server.port}`;
+  const mcpResponses: { era: "legacy" | "modern" | "auto"; method: string; status: number; contentType: string }[] = [];
+  const transport = (era: "legacy" | "modern" | "auto") => {
+    const recordingFetch: FetchLike = async (input, init) => {
+      const response = await fetch(input, init);
+      const requestUrl = input instanceof Request ? input.url : input.toString();
+      if (new URL(requestUrl).pathname === "/mcp") {
+        mcpResponses.push({
+          era,
+          method: input instanceof Request ? input.method : init?.method ?? "GET",
+          status: response.status,
+          contentType: response.headers.get("content-type") ?? "",
+        });
+      }
+      return response;
+    };
+    return new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), { fetch: recordingFetch });
+  };
   try {
     const statusResponse = await fetch(`${baseUrl}/api/status`);
     assert(statusResponse.headers.get("content-type")?.includes("application/json"), "status must be JSON");
-    const status = await statusResponse.json() as { protocolVersion: string; legacy: string; sse: boolean };
-    assert(status.protocolVersion === "2026-07-28" && status.legacy === "stateless" && status.sse === false, "status must advertise modern mode with stateless compatibility");
+    const status = await statusResponse.json() as {
+      protocolVersion: string;
+      legacy: string;
+      legacyProtocolVersion: string;
+      transport: string;
+      responseFraming: { modern: string; legacy: string };
+      standaloneSseEndpoint: boolean;
+      subscriptions: boolean;
+      capabilities: typeof RUNTIME_CAPABILITIES;
+    };
+    assert(status.protocolVersion === MODERN_PROTOCOL_VERSION && status.legacy === "stateless", "status must advertise modern mode with stateless compatibility");
+    assert(status.transport === "streamable-http", "status must identify Streamable HTTP");
+    assert(status.legacyProtocolVersion === LEGACY_PROTOCOL_VERSION, "status must identify the tested legacy protocol version");
+    assert(status.responseFraming.modern === "application/json" && status.responseFraming.legacy === "text/event-stream", "status must report era-specific response framing");
+    assert(status.standaloneSseEndpoint === false && status.subscriptions === false, "status must not advertise unimplemented streaming capabilities");
+    assert(JSON.stringify(status.capabilities) === JSON.stringify(RUNTIME_CAPABILITIES), "status must report the implemented capability matrix");
 
     const legacyClient = new Client(
       { name: "mcp-v2-legacy-acceptance", version: "0.1.0" },
-      { versionNegotiation: { mode: "legacy" } }
+      {
+        supportedProtocolVersions: [LEGACY_PROTOCOL_VERSION],
+        versionNegotiation: { mode: "legacy" },
+      }
     );
-    await legacyClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
+    await legacyClient.connect(transport("legacy"));
+    assert(legacyClient.getNegotiatedProtocolVersion() === LEGACY_PROTOCOL_VERSION, "legacy client must negotiate 2025-06-18");
+    assert(legacyClient.getProtocolEra() === "legacy", "legacy client must use the legacy era");
     const legacyTools = await legacyClient.listTools();
     assert(legacyTools.tools.some((tool) => tool.name === "orders.dashboard"), "legacy client must discover orders.dashboard");
     const legacyDashboard = await legacyClient.callTool({ name: "orders.dashboard", arguments: {} });
@@ -28,12 +65,30 @@ async function main() {
 
     const client = new Client(
       { name: "mcp-v2-http-acceptance", version: "0.1.0" },
-      { versionNegotiation: { mode: { pin: "2026-07-28" } } }
+      {
+        supportedProtocolVersions: [MODERN_PROTOCOL_VERSION],
+        versionNegotiation: { mode: { pin: MODERN_PROTOCOL_VERSION } },
+      }
     );
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
+    await client.connect(transport("modern"));
+    assert(client.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "modern client must negotiate 2026-07-28");
+    assert(client.getProtocolEra() === "modern", "modern client must use the modern era");
+    const discoverCapabilities = client.getDiscoverResult()?.capabilities;
+    assert(discoverCapabilities?.tools?.listChanged === false, "modern discovery must not advertise Tool subscriptions");
+    assert(discoverCapabilities.resources?.listChanged === false, "modern discovery must not advertise Resource subscriptions");
     const tools = await client.listTools();
     for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"]) {
       assert(tools.tools.some((tool) => tool.name === name), `missing ${name}`);
+    }
+    for (const name of ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.status"]) {
+      const annotations = tools.tools.find((tool) => tool.name === name)?.annotations;
+      assert(
+        annotations?.readOnlyHint === true
+          && annotations.destructiveHint === false
+          && annotations.openWorldHint === false
+          && annotations.idempotentHint === true,
+        `${name} must advertise safe read-only annotations`,
+      );
     }
     const dashboard = tools.tools.find((tool) => tool.name === "orders.dashboard");
     const dashboardMeta = dashboard?._meta as { ui?: { resourceUri?: string } } | undefined;
@@ -74,6 +129,19 @@ async function main() {
     assert((finish.structuredContent as { status: string }).status === "passed", "verification must pass after full chain");
     await client.close();
 
+    const autoClient = new Client(
+      { name: "mcp-v2-auto-negotiation-acceptance", version: "0.1.0" },
+      {
+        supportedProtocolVersions: [MODERN_PROTOCOL_VERSION, LEGACY_PROTOCOL_VERSION],
+        versionNegotiation: { mode: "auto" },
+      },
+    );
+    await autoClient.connect(transport("auto"));
+    assert(autoClient.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "auto client must prefer the modern protocol");
+    assert(autoClient.getProtocolEra() === "modern", "auto client must select the modern era");
+    assert((await autoClient.listTools()).tools.length === 8, "auto client must discover all tools");
+    await autoClient.close();
+
     const e2eResponse = await fetch(`${baseUrl}/api/e2e/run`, {
       method: "POST",
       headers: { accept: "application/json" },
@@ -90,6 +158,23 @@ async function main() {
     for (const id of ["protocol.modern", "protocol.legacy", "skills.order-summary", "skills.unknown", "verification.success", "verification.rejected", "mcp-app.resource"]) {
       assert(e2e.cases?.some((item) => item.id === id && item.status === "passed"), `missing passed E2E case ${id}`);
     }
+    assert(mcpResponses.length > 0, "MCP response content types were not observed");
+    assert(
+      mcpResponses
+        .filter(({ era }) => era !== "legacy")
+        .every(({ contentType }) => !contentType.includes("text/event-stream")),
+      `modern MCP responses must not use SSE: ${JSON.stringify(mcpResponses)}`,
+    );
+    assert(
+      mcpResponses
+        .filter(({ era, status }) => era !== "legacy" && status === 200)
+        .every(({ contentType }) => contentType.includes("application/json")),
+      "successful modern MCP result responses must use application/json",
+    );
+    assert(
+      mcpResponses.some(({ era, status, contentType }) => era === "legacy" && status === 200 && contentType.includes("text/event-stream")),
+      "legacy stateless compatibility must exercise its SSE response framing",
+    );
     console.log("acceptance:http PASS");
   } finally {
     server.stop(true);

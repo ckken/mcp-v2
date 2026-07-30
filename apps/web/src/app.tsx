@@ -10,8 +10,9 @@ const pages: Page[] = ["Overview", "E2E Lab", "Protocol", "Tools", "Skills", "MC
 const protocolRows = [
   ["server/discover", "Modern capability discovery", "required"],
   ["request envelope", "Protocol version on every request", "required"],
-  ["legacy fallback", "2025-era clients use stateless JSON HTTP", "enabled"],
-  ["application/json", "Responses must not use text/event-stream", "required"],
+  ["modern response", "2026-era results use application/json", "required"],
+  ["legacy fallback", "2025-era stateless POST results use SSE framing", "enabled"],
+  ["SSE endpoint", "No standalone legacy SSE endpoint", "disabled"],
 ];
 const demoTools = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.start", "verification.status", "verification.finish"];
 const demoSkills = ["skills.discover", "skills.run"];
