@@ -82,6 +82,18 @@ test("renders every navigation entry as an independent scene", async ({ page, co
   await expect(page.getByRole("button", { name: "运行会话验证" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 3, name: "v2 新特征" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 3, name: "实际路线与证据" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "老版本与 v2 路径切换" })).toBeVisible();
+  const versionSwitch = page.getByRole("group", { name: "切换 React Flow 版本路径" });
+  const oldFlowButton = versionSwitch.getByRole("button", { name: /老版本路径/ });
+  const v2FlowButton = versionSwitch.getByRole("button", { name: /v2 真实路径/ });
+  await expect(v2FlowButton).toHaveAttribute("aria-pressed", "true");
+  await oldFlowButton.click();
+  await expect(oldFlowButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("scenario-canvas-loop")).toHaveAttribute("data-view", "old");
+  await expect(page.getByTestId("scenario-canvas-loop").getByText("客户端写死入口")).toBeVisible();
+  await expect(page.getByTestId("scenario-canvas-loop").locator(".scenario-edge-old").first()).toBeVisible();
+  await v2FlowButton.click();
+  await expect(page.getByTestId("scenario-canvas-loop")).toHaveAttribute("data-view", "v2");
   const cacheFeature = page.getByRole("button", { name: /发现缓存语义/ });
   await cacheFeature.click();
   await expect(cacheFeature).toHaveAttribute("aria-pressed", "true");
@@ -104,6 +116,7 @@ test("renders every navigation entry as an independent scene", async ({ page, co
     await expect(page.getByTestId(`scenario-canvas-${id}`)).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "v2 新特征" })).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "实际路线与证据" })).toBeVisible();
+    await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "老版本与 v2 路径切换" })).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "动态入口" })).toBeVisible();
     await expect(page.getByTestId(`scenario-workflow-${id}`).getByText("server/discover", { exact: true }).first()).toBeVisible();
     const firstRouteNode = page.getByTestId(`scenario-workflow-${id}`).locator(".scenario-route-rail button").first();
@@ -121,7 +134,10 @@ test("renders every navigation entry as an independent scene", async ({ page, co
 test("keeps every animated workflow in its own closed loop", async ({ page }) => {
   await page.goto("/");
 
+  await page.getByRole("button", { name: /老版本路径/ }).click();
+  await expect(page.getByTestId("scenario-canvas-loop")).toHaveAttribute("data-view", "old");
   await page.getByRole("button", { name: "运行闭环自检" }).click();
+  await expect(page.getByRole("button", { name: /v2 真实路径/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("scenario-workflow-loop").locator(".scenario-edge-running")).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-loop").getByText("闭环已通过", { exact: true })).toBeVisible();
   await expect(page.getByTestId("scenario-workflow-loop").locator(".scenario-step-inspector"))

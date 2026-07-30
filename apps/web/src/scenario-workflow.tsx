@@ -32,12 +32,14 @@ import { asScenarioReport, type ScenarioReportView } from "./scenario-report";
 import type { ScenarioDefinition } from "./scenarios";
 
 type WorkflowState = "idle" | "queued" | "running" | "passed" | "failed" | "skipped";
+type FlowView = "old" | "v2";
 
 type WorkflowNodeData = {
   index: string;
   label: string;
   copy: string;
   state: WorkflowState;
+  era: FlowView;
   featured: boolean;
   compact: boolean;
   durationMs?: number;
@@ -50,7 +52,7 @@ const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeou
 function WorkflowNodeCard({ data }: NodeProps<WorkflowNode>) {
   return (
     <article
-      className={`scenario-node scenario-node-${data.state}${data.featured ? " scenario-node-featured" : ""}`}
+      className={`scenario-node scenario-node-${data.state} scenario-node-era-${data.era}${data.featured ? " scenario-node-featured" : ""}`}
       aria-label={`${data.label}：${data.state}`}
     >
       <Handle type="target" position={data.compact ? Position.Top : Position.Left} />
@@ -92,6 +94,20 @@ function nodePosition(index: number, count: number, compact: boolean) {
   return {
     x: 420 + Math.cos(angle) * 290,
     y: 205 + Math.sin(angle) * 170,
+  };
+}
+
+function oldPathPosition(index: number, compact: boolean) {
+  if (compact) {
+    return {
+      x: index % 2 === 0 ? 46 : 74,
+      y: 36 + index * 126,
+    };
+  }
+
+  return {
+    x: 76 + index * 278,
+    y: index % 2 === 0 ? 146 : 226,
   };
 }
 
@@ -187,6 +203,7 @@ export function ScenarioWorkflow({
     definition.features[0]?.stepId ?? definition.steps[0]?.id ?? "",
   );
   const [entryDirty, setEntryDirty] = useState(false);
+  const [flowView, setFlowView] = useState<FlowView>("v2");
   const compact = useCompactWorkflow();
 
   const loadLatest = async () => {
@@ -215,6 +232,7 @@ export function ScenarioWorkflow({
     setReport(null);
     setError(null);
     setEntryDirty(false);
+    setFlowView("v2");
     setSelectedFeatureId(definition.features[0]?.id ?? "");
     setSelectedStepId(definition.features[0]?.stepId ?? definition.steps[0]?.id ?? "");
     void Promise.all([loadLatest(), loadEntry()])
@@ -232,6 +250,7 @@ export function ScenarioWorkflow({
   }, [definition.id]);
 
   const run = async () => {
+    setFlowView("v2");
     setRunning(true);
     setEntryDirty(false);
     setClosing(false);
@@ -344,6 +363,7 @@ export function ScenarioWorkflow({
             ? "正在发现 v2 能力"
             : `${entry.discovery.tools.length} Tools · ${entryRequest.protocolMode}`,
           state: readyState,
+          era: "v2" as const,
           featured: false,
           compact,
         },
@@ -359,6 +379,7 @@ export function ScenarioWorkflow({
             label: step.label,
             copy: result?.detail ?? step.copy,
             state: stepState({ index, report, playbackReport, activeStepIndex, running }),
+            era: "v2" as const,
             featured: selectedStepId === step.id,
             compact,
             ...(result === undefined ? {} : { durationMs: result.durationMs }),
@@ -432,6 +453,57 @@ export function ScenarioWorkflow({
   const selectedState = nodes.find((node) => node.id === selectedStepId)?.data.state
     ?? (visibleReport !== null && selectedDefinitionStep !== undefined ? "skipped" : "queued");
   const selectedEvidence = selectedResult?.evidence ?? [];
+
+  const oldNodes = useMemo<WorkflowNode[]>(() => {
+    const oldSteps = [
+      {
+        id: "old-entry",
+        label: "客户端写死入口",
+        copy: `预设版本、${definition.label}能力与调用顺序`,
+      },
+      {
+        id: "old-call",
+        label: "发起一次请求",
+        copy: selectedFeature?.before ?? "调用方自行约定请求语义",
+      },
+      {
+        id: "old-result",
+        label: "客户端解释结果",
+        copy: `没有 ${selectedFeature?.tag ?? "SERVER EVIDENCE"} 对应的服务端证明`,
+      },
+      {
+        id: "old-stop",
+        label: "流程到此结束",
+        copy: "无动态恢复、真实路线或服务端 Verdict 闭环",
+      },
+    ] as const;
+
+    return oldSteps.map((step, index) => ({
+      id: step.id,
+      type: "workflow" as const,
+      position: oldPathPosition(index, compact),
+      data: {
+        index: `OLD ${index + 1}`,
+        label: step.label,
+        copy: step.copy,
+        state: "idle" as const,
+        era: "old" as const,
+        featured: index === 1,
+        compact,
+      },
+    }));
+  }, [compact, definition.label, selectedFeature]);
+
+  const oldEdges = useMemo<Edge[]>(() => oldNodes.slice(0, -1).map((node, index) => ({
+    id: `${definition.id}-${node.id}-${oldNodes[index + 1]!.id}`,
+    source: node.id,
+    target: oldNodes[index + 1]!.id,
+    className: "scenario-edge-old",
+    markerEnd: { type: MarkerType.ArrowClosed },
+  })), [definition.id, oldNodes]);
+
+  const displayedNodes = flowView === "v2" ? nodes : oldNodes;
+  const displayedEdges = flowView === "v2" ? edges : oldEdges;
 
   const selectFeature = (featureId: string, stepId: string) => {
     setSelectedFeatureId(featureId);
@@ -646,16 +718,57 @@ export function ScenarioWorkflow({
         </article>
       </section>
 
-      <div className="scenario-canvas" data-testid={`scenario-canvas-${definition.id}`}>
+      <section className="scenario-flow-comparison" aria-label={`${definition.label} React Flow 版本对比`}>
+        <div className="scenario-flow-comparison-heading">
+          <div>
+            <p>REACT FLOW VERSION SWITCH</p>
+            <h3>老版本与 v2 路径切换</h3>
+            <span>直接切换画布结构，观察静态单次调用与动态证据闭环的差别。</span>
+          </div>
+          <Badge variant={flowView === "v2" ? "secondary" : "outline"}>
+            {flowView === "v2" ? "V2 · LIVE" : "OLD · CONCEPT"}
+          </Badge>
+        </div>
+        <div className="scenario-flow-switch" role="group" aria-label="切换 React Flow 版本路径">
+          <button
+            type="button"
+            aria-pressed={flowView === "old"}
+            onClick={() => setFlowView("old")}
+          >
+            <small>OLD FLOW · 概念对照</small>
+            <strong>老版本路径</strong>
+            <span>静态入口 → 一次请求 → 客户端解释 → 结束</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={flowView === "v2"}
+            onClick={() => setFlowView("v2")}
+          >
+            <small>V2 FLOW · 真实运行</small>
+            <strong>v2 真实路径</strong>
+            <span>动态发现 → 服务端路线 → 步骤证据 → Verdict 回流</span>
+          </button>
+        </div>
+        <p className="scenario-flow-boundary">
+          “老版本路径”只解释交互差异，不发送请求；它不等于本项目可真实运行的 2025-06-18 stateless fallback。
+        </p>
+      </section>
+
+      <div
+        className="scenario-canvas"
+        data-testid={`scenario-canvas-${definition.id}`}
+        data-view={flowView}
+      >
         <ReactFlow<WorkflowNode, Edge>
-          nodes={nodes}
-          edges={edges}
+          key={`${definition.id}-${flowView}-${compact ? "compact" : "wide"}`}
+          nodes={displayedNodes}
+          edges={displayedEdges}
           nodeTypes={nodeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
           onNodeClick={(_, node) => {
-            if (node.id !== "ready") setSelectedStepId(node.id);
+            if (flowView === "v2" && node.id !== "ready") setSelectedStepId(node.id);
           }}
           minZoom={0.45}
           maxZoom={1.25}
