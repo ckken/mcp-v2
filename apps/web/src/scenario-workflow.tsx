@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  scenarioEntryDefinitionSchema,
+  type ScenarioEntryDefinition,
+  type ScenarioEntryField,
+  type ScenarioEntryRequest,
+  type ScenarioEntryValue,
+} from "@mcp-v2/shared";
+import {
   Background,
   BackgroundVariant,
   Controls,
@@ -64,8 +71,35 @@ const nodeTypes = { workflow: WorkflowNodeCard };
 
 function matchesDefinition(report: ScenarioReportView, definition: ScenarioDefinition) {
   return report.scenarioId === definition.id
-    && report.steps.length === definition.steps.length
-    && report.steps.every((step, index) => step.id === definition.steps[index]?.id);
+    && report.route.length === report.steps.length
+    && report.steps.every((step, index) => step.id === report.route[index]);
+}
+
+function nodePosition(index: number, count: number) {
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
+  return {
+    x: 420 + Math.cos(angle) * 290,
+    y: 205 + Math.sin(angle) * 170,
+  };
+}
+
+function initializeEntryRequest(entry: ScenarioEntryDefinition): ScenarioEntryRequest {
+  const request: ScenarioEntryRequest = {
+    trigger: "ui",
+    protocolMode: "auto",
+    parameters: {},
+  };
+  for (const field of entry.fields) {
+    if (field.defaultValue === undefined) continue;
+    if (field.binding === "protocolMode") {
+      request.protocolMode = String(field.defaultValue) as ScenarioEntryRequest["protocolMode"];
+    } else if (field.binding === "selection") {
+      request.selection = String(field.defaultValue);
+    } else {
+      request.parameters[field.key] = field.defaultValue;
+    }
+  }
+  return request;
 }
 
 function stepState({
@@ -106,6 +140,12 @@ export function ScenarioWorkflow({
   const [running, setRunning] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entry, setEntry] = useState<ScenarioEntryDefinition | null>(null);
+  const [entryRequest, setEntryRequest] = useState<ScenarioEntryRequest>({
+    trigger: "ui",
+    protocolMode: "auto",
+    parameters: {},
+  });
 
   const loadLatest = async () => {
     const response = await fetch(`/api/scenarios/${definition.id}/latest`, {
@@ -117,11 +157,28 @@ export function ScenarioWorkflow({
     return next;
   };
 
+  const loadEntry = async () => {
+    const response = await fetch(`/api/scenarios/${definition.id}/entry`, {
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`动态入口发现失败：HTTP ${response.status}`);
+    const parsed = scenarioEntryDefinitionSchema.safeParse(await response.json());
+    if (!parsed.success) throw new Error("动态入口契约无效");
+    return parsed.data;
+  };
+
   useEffect(() => {
     let current = true;
-    void loadLatest()
-      .then((next) => {
-        if (current) setReport(next);
+    setEntry(null);
+    setReport(null);
+    setError(null);
+    void Promise.all([loadLatest(), loadEntry()])
+      .then(([nextReport, nextEntry]) => {
+        if (current) {
+          setReport(nextReport);
+          setEntry(nextEntry);
+          setEntryRequest(initializeEntryRequest(nextEntry));
+        }
       })
       .catch((cause) => {
         if (current) setError(cause instanceof Error ? cause.message : "场景报告不可用");
@@ -139,7 +196,8 @@ export function ScenarioWorkflow({
     try {
       const response = await fetch(`/api/scenarios/${definition.id}/run`, {
         method: "POST",
-        headers: { accept: "application/json" },
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify(entryRequest),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({})) as { error?: unknown };
@@ -173,14 +231,55 @@ export function ScenarioWorkflow({
     setRefreshing(true);
     setError(null);
     try {
-      const [next] = await Promise.all([loadLatest(), onRefresh?.() ?? Promise.resolve()]);
+      const [next, nextEntry] = await Promise.all([
+        loadLatest(),
+        loadEntry(),
+        onRefresh?.() ?? Promise.resolve(),
+      ]);
       setReport(next);
+      setEntry(nextEntry);
+      setEntryRequest(initializeEntryRequest(nextEntry));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "场景刷新失败");
     } finally {
       setRefreshing(false);
     }
   };
+
+  const updateEntryField = (field: ScenarioEntryField, value: ScenarioEntryValue) => {
+    setEntryRequest((current) => {
+      if (field.binding === "protocolMode") {
+        return { ...current, protocolMode: String(value) as ScenarioEntryRequest["protocolMode"] };
+      }
+      if (field.binding === "selection") return { ...current, selection: String(value) };
+      return {
+        ...current,
+        parameters: { ...current.parameters, [field.key]: value },
+      };
+    });
+  };
+
+  const entryFieldValue = (field: ScenarioEntryField): ScenarioEntryValue => {
+    if (field.binding === "protocolMode") return entryRequest.protocolMode;
+    if (field.binding === "selection") return entryRequest.selection ?? field.defaultValue ?? "";
+    return entryRequest.parameters[field.key] ?? field.defaultValue ?? "";
+  };
+
+  const visibleReport = report ?? playbackReport;
+  const renderedSteps = useMemo(() => {
+    if (visibleReport !== null) {
+      return visibleReport.steps.map((step, index) => ({
+        id: step.id,
+        label: step.title,
+        copy: step.detail,
+        position: nodePosition(index, visibleReport.steps.length),
+      }));
+    }
+    return definition.steps.map((step, index) => ({
+      ...step,
+      position: nodePosition(index, definition.steps.length),
+    }));
+  }, [definition.steps, visibleReport]);
 
   const nodes = useMemo<WorkflowNode[]>(() => {
     const readyState: WorkflowState = report?.status
@@ -192,12 +291,14 @@ export function ScenarioWorkflow({
         position: { x: 20, y: 182 },
         data: {
           index: "00",
-          label: closing ? "闭环回流" : "Ready",
-          copy: report === null ? "等待本场景触发" : `最近结果 ${report.status}`,
+          label: closing ? "闭环回流" : "动态入口",
+          copy: entry === null
+            ? "正在发现 v2 能力"
+            : `${entry.discovery.tools.length} Tools · ${entryRequest.protocolMode}`,
           state: readyState,
         },
       },
-      ...definition.steps.map((step, index) => {
+      ...renderedSteps.map((step, index) => {
         const result = (report ?? playbackReport)?.steps.find((item) => item.id === step.id);
         return {
           id: step.id,
@@ -213,10 +314,10 @@ export function ScenarioWorkflow({
         };
       }),
     ];
-  }, [activeStepIndex, closing, definition.steps, playbackReport, report, running]);
+  }, [activeStepIndex, closing, entry, entryRequest.protocolMode, playbackReport, renderedSteps, report, running]);
 
   const edges = useMemo<Edge[]>(() => {
-    const sequence = ["ready", ...definition.steps.map((step) => step.id), "ready"];
+    const sequence = ["ready", ...renderedSteps.map((step) => step.id), "ready"];
     return sequence.slice(0, -1).map((source, index) => {
       const target = sequence[index + 1] ?? "ready";
       const isClosingEdge = index === sequence.length - 2;
@@ -248,9 +349,8 @@ export function ScenarioWorkflow({
         markerEnd: { type: MarkerType.ArrowClosed },
       };
     });
-  }, [activeStepIndex, closing, definition.id, definition.steps, playbackReport, report, running]);
+  }, [activeStepIndex, closing, definition.id, playbackReport, renderedSteps, report, running]);
 
-  const visibleReport = report ?? playbackReport;
   const activeStep = activeStepIndex >= 0 ? visibleReport?.steps[activeStepIndex] : undefined;
 
   return (
@@ -259,7 +359,7 @@ export function ScenarioWorkflow({
         <div>
           <p>ANIMATED CLOSED LOOP</p>
           <h2>{definition.label}工作流</h2>
-          <span>每次运行只更新 Scene {definition.scene}，结束后沿闭环边返回 Ready。</span>
+          <span>入口由实时 v2 发现结果生成，只更新 Scene {definition.scene}，结束后沿闭环边回流。</span>
         </div>
         <div className="scenario-workflow-actions">
           {definition.id === "codex" && (
@@ -275,7 +375,7 @@ export function ScenarioWorkflow({
           )}
           <Button
             aria-label={definition.runLabel}
-            disabled={running || refreshing}
+            disabled={running || refreshing || entry === null}
             onClick={() => void run()}
           >
             <PlayIcon data-icon="inline-start" />
@@ -283,6 +383,85 @@ export function ScenarioWorkflow({
           </Button>
         </div>
       </header>
+
+      <section className="scenario-entry" aria-label={`${definition.label}动态入口`}>
+        <div className="scenario-entry-heading">
+          <div>
+            <p>SERVER-DISCOVERED ENTRY</p>
+            <h3>动态入口</h3>
+            <span>字段来源于当前服务能力，参数只触发本场景的独立闭环。</span>
+          </div>
+          <div className="scenario-entry-summary">
+            <Badge variant="outline">server/discover</Badge>
+            <Badge variant="outline">{entry?.discovery.tools.length ?? 0} TOOLS</Badge>
+            <Badge variant="outline">{entry?.cache.tools.ttlMs ?? 0}ms CACHE</Badge>
+          </div>
+        </div>
+        {entry === null ? (
+          <div className="scenario-entry-loading">正在读取协议、目录和扩展能力…</div>
+        ) : (
+          <>
+            <div className="scenario-entry-fields">
+              {entry.fields.map((field) => (
+                <label key={field.key} className="scenario-entry-field">
+                  <span>
+                    <strong>{field.label}</strong>
+                    <small>{field.description}</small>
+                  </span>
+                  {field.control === "select" && (
+                    <select
+                      aria-label={field.label}
+                      value={String(entryFieldValue(field))}
+                      disabled={running}
+                      onChange={(event) => updateEntryField(field, event.target.value)}
+                    >
+                      {field.options?.map((entryOption) => (
+                        <option key={String(entryOption.value)} value={String(entryOption.value)}>
+                          {entryOption.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {field.control === "text" && (
+                    <input
+                      aria-label={field.label}
+                      type="text"
+                      maxLength={256}
+                      value={String(entryFieldValue(field))}
+                      disabled={running}
+                      onChange={(event) => updateEntryField(field, event.target.value)}
+                    />
+                  )}
+                  {field.control === "boolean" && (
+                    <input
+                      aria-label={field.label}
+                      type="checkbox"
+                      checked={entryFieldValue(field) === true}
+                      disabled={running}
+                      onChange={(event) => updateEntryField(field, event.target.checked)}
+                    />
+                  )}
+                  <code>{field.source}</code>
+                </label>
+              ))}
+            </div>
+            <div className="scenario-entry-contract">
+              {(visibleReport?.entry.gates ?? []).map((gate) => (
+                <span key={gate.id} className={`scenario-entry-gate ${gate.status}`}>
+                  <span className={`status-dot ${gate.status}`} />
+                  {gate.label}
+                </span>
+              ))}
+              {visibleReport === null && entry.discovery.extensions.map((extension) => (
+                <span key={extension} className="scenario-entry-gate checking">
+                  <span className="status-dot checking" />
+                  {extension}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
 
       <div className="scenario-canvas" data-testid={`scenario-canvas-${definition.id}`}>
         <ReactFlow<WorkflowNode, Edge>

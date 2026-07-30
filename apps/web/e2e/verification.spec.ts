@@ -80,6 +80,8 @@ test("renders every navigation entry as an independent scene", async ({ page }) 
     await expect(page.locator(".scene-stage")).toHaveAttribute("data-scene", scene.slice(-2));
     await expect(page.getByTestId(`scenario-workflow-${id}`)).toBeVisible();
     await expect(page.getByTestId(`scenario-canvas-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`scenario-workflow-${id}`).getByRole("heading", { level: 3, name: "动态入口" })).toBeVisible();
+    await expect(page.getByTestId(`scenario-workflow-${id}`).getByText("server/discover", { exact: true }).first()).toBeVisible();
   }
 
   await expect(page.getByRole("button", { name: "刷新数据" })).toBeVisible();
@@ -101,24 +103,51 @@ test("keeps every animated workflow in its own closed loop", async ({ page }) =>
   expect(firstLoop.report?.runId).toBeTruthy();
 
   await openDashboardSection(page, "01 · 协议");
+  await page.getByRole("combobox", { name: "协议入口" }).selectOption("modern");
   await page.getByRole("button", { name: "运行协议场景" }).click();
   await expect(page.getByTestId("scenario-workflow-protocol").getByText("闭环已通过", { exact: true })).toBeVisible();
 
   const [loopAfterProtocol, protocolAfterRun] = await Promise.all([
     page.request.get("/api/scenarios/loop/latest").then((response) => response.json()) as Promise<{ report?: { runId?: string } }>,
-    page.request.get("/api/scenarios/protocol/latest").then((response) => response.json()) as Promise<{ report?: { runId?: string } }>,
+    page.request.get("/api/scenarios/protocol/latest").then((response) => response.json()) as Promise<{
+      report?: { runId?: string; route?: string[]; steps?: unknown[] };
+    }>,
   ]);
   expect(loopAfterProtocol.report?.runId).toBe(firstLoop.report?.runId);
   expect(protocolAfterRun.report?.runId).toBeTruthy();
   expect(protocolAfterRun.report?.runId).not.toBe(firstLoop.report?.runId);
+  expect(protocolAfterRun.report?.route).not.toContain("protocol.legacy");
+  expect(protocolAfterRun.report?.steps).toHaveLength(4);
+});
+
+test("uses live entry controls to change the Tool workflow route", async ({ page }) => {
+  await page.goto("/");
+  await openDashboardSection(page, "02 · 工具");
+  await page.getByRole("combobox", { name: "入口 Tool" }).selectOption("orders.search");
+  await page.getByRole("checkbox", { name: "应用任务闭环" }).uncheck();
+  const runResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/scenarios/tools/run")
+      && response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: "运行工具场景" }).click();
+  const executed = await (await runResponse).json() as {
+    route?: string[];
+    entry?: { selection?: string; parameters?: Record<string, unknown> };
+  };
+  await expect(page.getByTestId("scenario-workflow-tools").getByText("闭环已通过", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("scenario-workflow-tools").getByText("selection=orders.search", { exact: false })).toBeVisible();
+
+  expect(executed.entry?.selection).toBe("orders.search");
+  expect(executed.entry?.parameters?.taskLifecycle).toBe(false);
+  expect(executed.route).not.toContain("tools.tasks");
 });
 
 test("renders every dynamic MCP App view and remains usable at 390px", async ({ page }) => {
   await page.goto("/");
   await openDashboardSection(page, "04 · MCP 应用");
   await expect(page.getByText("工具结果已送达 ui:// 资源")).toBeVisible();
-  await expect(page.getByText("ui://mcp-v2/orders-dashboard.html")).toBeVisible();
-  await expect(page.getByText("text/html;profile=mcp-app")).toBeVisible();
+  await expect(page.locator("code.break-all").filter({ hasText: "ui://mcp-v2/orders-dashboard.html" })).toBeVisible();
+  await expect(page.locator("code.break-all").filter({ hasText: "text/html;profile=mcp-app" })).toBeVisible();
 
   const frameElement = page.locator('iframe[title="MCP App 订单看板"]');
   await frameElement.scrollIntoViewIfNeeded();

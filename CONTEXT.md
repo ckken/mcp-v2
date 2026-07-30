@@ -28,7 +28,7 @@ acceptance gates.
 | Task | An application-level workflow exposed through `tasks.*` Tools; it does not claim removed native Task RPC support |
 | MCP App | A Tool-linked `ui://` Resource rendered by a host through the MCP Apps bridge |
 | verification | Server-owned evidence and confirmation state; clients cannot directly manufacture a passing result |
-| scenario | A server-owned five-step report with an isolated latest result; running one scene cannot update another scene |
+| scenario | A server-owned runtime route derived from a bounded dynamic entry; each scene owns an isolated latest result |
 
 ## Non-negotiable boundaries
 

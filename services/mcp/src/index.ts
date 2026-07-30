@@ -4,6 +4,7 @@ import {
   OAuthErrorCode,
   requireBearerAuth,
 } from "@modelcontextprotocol/server";
+import { scenarioEntryRequestSchema } from "@mcp-v2/shared";
 import { mcpHandler } from "./server.ts";
 import {
   type DashboardStatus,
@@ -123,7 +124,31 @@ export function createApp(options: AppOptions = {}) {
         const scenarioId = scenarioRunMatch[1] ?? "";
         if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
         try {
-          return json(await scenarioRunner.runScenario(scenarioId, resolveMcpUrl(url), internalAuthToken));
+          const text = await request.text();
+          let payload: unknown = {};
+          if (text !== "") {
+            try {
+              payload = JSON.parse(text) as unknown;
+            } catch {
+              return json({ error: "Invalid scenario entry JSON" }, 400);
+            }
+          }
+          const parsed = scenarioEntryRequestSchema.safeParse(payload);
+          if (!parsed.success) {
+            return json({
+              error: "Invalid scenario entry",
+              issues: parsed.error.issues.map((issue) => ({
+                path: issue.path.join("."),
+                message: issue.message,
+              })),
+            }, 400);
+          }
+          return json(await scenarioRunner.runScenario(
+            scenarioId,
+            resolveMcpUrl(url),
+            internalAuthToken,
+            parsed.data,
+          ));
         } catch (error) {
           return json({ error: error instanceof Error ? error.message : "Scenario failed" }, 500);
         }
@@ -174,6 +199,20 @@ export function createApp(options: AppOptions = {}) {
         const scenarioId = scenarioLatestMatch[1] ?? "";
         if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
         return json({ report: scenarioRunner.getScenarioReport(scenarioId) ?? null });
+      }
+      const scenarioEntryMatch = url.pathname.match(/^\/api\/scenarios\/([^/]+)\/entry$/);
+      if (scenarioEntryMatch !== null) {
+        const scenarioId = scenarioEntryMatch[1] ?? "";
+        if (!isScenarioId(scenarioId)) return json({ error: "Unknown scenario" }, 404);
+        try {
+          return json(await scenarioRunner.describeScenarioEntry(
+            scenarioId,
+            resolveMcpUrl(url),
+            internalAuthToken,
+          ));
+        } catch (error) {
+          return json({ error: error instanceof Error ? error.message : "Scenario entry discovery failed" }, 502);
+        }
       }
       if (url.pathname === "/api/demo/tools") {
         return json({

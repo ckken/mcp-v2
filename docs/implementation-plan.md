@@ -34,6 +34,12 @@ TypeScript 7。
   不伪装成当前 SDK 已移除的旧版原生 Tasks。
 - Auth 使用可配置 Bearer Token 与 scope；本地默认关闭，设置
   `MCP_AUTH_TOKEN` 后启用。
+- `server/discover`、`tools/list`、`prompts/list`、`resources/list/read`
+  返回明确的 `ttlMs/cacheScope`；Tool 暴露并校验 `outputSchema`。
+- 请求使用 W3C `traceparent`，`verification.finish` 通过
+  `input_required` + HMAC `requestState` 完成人工确认重入。
+- 每个场景的入口契约从实时发现生成，前端只提交有界参数；服务端返回实际
+  `route`，React Flow 不假设固定五步。
 
 ## Workspace
 
@@ -51,14 +57,15 @@ tests/e2e         真实浏览器验收
 | 场景 | 独立闭环 |
 | --- | --- |
 | 00 闭环实验 | status → registry → catalogs → matrix → verdict → Ready，只检查自身且不触发其他场景 |
-| 01 协议 | modern → legacy → framing → boundary → verdict → Ready |
-| 02 工具 | discovery → annotations → calls → Tasks → verdict → Ready |
+| 01 协议 | 根据 auto/modern/legacy 入口选择握手 → framing → boundary → verdict → Entry |
+| 02 工具 | discovery → schema/annotations → selected call → optional application Tasks → verdict → Entry |
 | 03 技能 | Prompts → discovery → execution → input/error → verdict → Ready |
 | 04 MCP 应用 | metadata → Resource → bridge → render → verdict → Ready |
 | 05 Codex 会话 | start → calls → evidence → confirm → verdict → Ready |
 
-每个场景使用同一个定义驱动的 React Flow 渲染器，但拥有独立的运行状态、
-最新报告和服务端入口。运行开始后只播放真实响应中的步骤结果，不能预先显示
+每个场景使用同一个契约驱动的 React Flow 渲染器，但拥有独立的动态入口、
+运行状态和最新报告。入口字段来自 `server/discover`、`tools/list` 和应用
+目录；运行开始后只播放真实响应中的实际路线，不能预先显示
 通过。顶部状态栏只显示服务状态、协议版本与当前场景；不设置重复的总览和
 全链路入口。“刷新数据 / 运行会话验证”只放在 Scene 05 内。
 

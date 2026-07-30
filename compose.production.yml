@@ -15,6 +15,7 @@ services:
     environment:
       HOST: 0.0.0.0
       INTERNAL_MCP_URL: http://127.0.0.1:3000/mcp
+      MCP_REQUEST_STATE_SECRET: ${MCP_REQUEST_STATE_SECRET:-}
       NODE_ENV: production
       PORT: "3000"
     networks:

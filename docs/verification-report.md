@@ -8,18 +8,19 @@
 | --- | --- | ---: | --- |
 | 项目规划能力 | 通过 | 8/8（100%） | Tools、Resources、Prompts、Skills、Apps、Tasks、Auth、Verification 均已实现 |
 | 自动化 E2E | 通过 | 25/25（100%） | modern、legacy、Prompt、Tool、Task、Skill、Verification、MCP App |
-| Modern MCP | 通过 | 当前用例 100% | 固定协商 `2026-07-28`，成功响应为 JSON |
+| Modern MCP | 通过 | 当前用例 100% | pinned/auto 协商 `2026-07-28`，成功响应为 JSON |
+| v2 新特征 | 通过 | 本项目选定范围 5/5 | cache hints、JSON Schema 2020-12/outputSchema、Trace Context、`input_required`、Extensions |
 | Legacy Codex 兼容 | 通过 | 当前用例 100% | `2025-06-18` stateless fallback，结果使用 SSE 响应帧 |
 | Web Host MCP App | 通过 | 当前用例 100% | 桌面与 390px、三视图、动态筛选、反向 Tool 调用 |
-| 独立场景闭环 | 通过 | 6/6（100%） | Scene 00–05 各自运行五步真实检查，报告与运行状态隔离 |
+| 独立场景闭环 | 通过 | 6/6（100%） | Scene 00–05 入口动态发现，参数改变实际路线，报告与运行状态隔离 |
 | Auth 基线 | 通过 | Demo/内网基线 | Bearer Token、scope、401、403、授权调用；不等同完整 OAuth/OIDC |
 | Codex Desktop 内嵌 UI | 未验证 | 不计入通过 | Tool 可调用，但尚无可确认的 widget 渲染证据 |
-| 公网生产就绪 | 未完成 | 不建议直接上线 | 仍缺外部身份源、持久化、限流、监控和多实例治理 |
+| 公网部署 | 通过 | 单实例 Demo | Docker + TLS 域名可运行；仍不等于生产级治理完成 |
 
 | 问题 | 最终回答 |
 | --- | --- |
 | 当前项目能否兼容 v2 正常运行？ | 能。`2026-07-28` modern Client、auto negotiation 和 `2025-06-18` legacy Client 均已通过真实 HTTP 调用。 |
-| 之前未实现的能力是否已补齐？ | 已补齐项目范围内的 Prompts、Tasks、Auth，并加入自动验收。 |
+| 之前未实现的 v2 缺口是否已补齐？ | 已补齐动态发现入口、缓存提示、完整输入/输出 Schema、Trace Context 和多轮人工确认。 |
 | 是否等于 MCP v2 全规范 100%？ | 不等于。这里的 100% 是本项目定义的 8 类能力与 25 个用例，不代表所有可选扩展。 |
 | 是否可直接公网生产？ | 不建议。协议兼容与功能 Demo 已完成，生产工程仍需补强。 |
 
@@ -35,10 +36,14 @@
 | Tasks | 5 个应用级 Task Tool | create/status/list/cancel/result | 轮询、完成、取消、结果、未知 ID 通过 |
 | Auth | 可配置 Bearer Token + scope | `MCP_AUTH_TOKEN` 或注入配置 | 401、403、合法 Client 调用通过 |
 | Verification | start/status/finish | 服务端证据链判定 | 确认通过与拒绝失败路径均通过 |
-| 场景工作流 | 6 个独立 API + React Flow | 每场景五步报告与独立 latest 槽位 | 6/6 通过，跨场景和跨 app 实例隔离通过 |
+| v2 发现与缓存 | `server/discover` + list/read | public `ttlMs/cacheScope` | discover/list/read 实际响应通过 |
+| v2 Schema | 13 个 Tool `outputSchema` | `orders.search` 使用 `$defs`、`$ref`、`allOf` | SDK 客户端运行时校验通过 |
+| v2 Trace | W3C `traceparent` | 请求元数据贯穿 Tool 调用 | Tool 结果证据回读通过 |
+| v2 多轮交互 | `verification.finish` | `input_required` + HMAC `requestState` | 自动 fulfil、服务端重入、确认/拒绝通过 |
+| 场景工作流 | 6 个动态入口 API + React Flow | 实际 `route` 与独立 latest 槽位 | 6/6 通过，4/5 步分支与隔离通过 |
 
-> Tasks 使用应用级 Tool 模型。当前 `@modelcontextprotocol/server@2.0.0`
-> 的 `2026-07-28` 运行时不提供旧版原生 Tasks；项目没有伪造已移除的协议能力。
+> Tasks 使用应用级 Tool 模型，不伪装成 v2 核心能力。若产品需要协议级异步
+> 任务，需要另行接入并验收 Tasks Extension；当前 `tasks.*` 只属于应用层。
 
 ## 3. 协议兼容矩阵
 
@@ -49,6 +54,7 @@
 | Legacy stateless | `2025-06-18` | 固定 supported version | `text/event-stream` | 通过 |
 | 独立旧 SSE endpoint | 不提供 | 不适用 | 不适用 | 符合设计 |
 | `subscriptions/listen` | 不提供 | 不宣告订阅能力 | 不适用 | 符合当前静态目录 |
+| 动态入口扩展 | `com.kenvoai.mcp-v2.dynamic-entry` | `server/discover` | 项目本地 Extension | 通过 |
 
 | 已纠正的旧口径 | 正确结论 |
 | --- | --- |
@@ -108,11 +114,11 @@
 | 门禁 | 实际结果 |
 | --- | --- |
 | TypeScript | 4 个 workspace 通过 |
-| Bun tests | 23/23 |
+| Bun tests | 以根级 `bun run test` 实时结果为准 |
 | Production build | Web、MCP App、Server 通过 |
 | HTTP acceptance | 通过，含 Prompt、Task、Auth、6 个场景闭环与隔离 |
 | 服务端 E2E | 25/25 |
-| Playwright | desktop + 390px，8/8 |
+| Playwright | desktop + 390px，10/10 |
 | Codex-oriented acceptance | 通过 |
 
 ## 7. 客户端与 UI
@@ -132,7 +138,8 @@
 | --- | --- | --- | --- |
 | P0 | 外部 OAuth/OIDC 与密钥轮换 | 当前 Auth 适合 Demo/受控环境 | 接入 issuer/JWKS、audience、过期与轮换 |
 | P0 | 持久化与多实例一致性 | Task 与 Verification 当前在内存 | 引入数据库、幂等键、恢复和清理策略 |
-| P0 | 限流、指标、结构化审计 | 不满足公网运维要求 | 增加 rate limit、metrics、trace、告警 |
+| P0 | 限流、指标、结构化审计 | 已有请求 Trace，但不满足公网运维要求 | 增加 rate limit、OpenTelemetry、metrics、告警 |
+| P1 | Tasks Extension | 当前只有应用级 `tasks.*` Tool | 仅在需要协议级异步任务时接入官方扩展 |
 | P1 | Codex Desktop 内嵌 UI | 无法确认真实 widget 体验 | 宿主提供可调用/可渲染链路后复测 |
 | P2 | 动态订阅 | Tool/Resource/Prompt 目录变化不会推送 | 有动态目录需求时实现 |
 

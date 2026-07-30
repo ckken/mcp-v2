@@ -82,20 +82,38 @@ async function main() {
     assert(legacyDashboard._meta?.["openai/outputTemplate"] === "ui://mcp-v2/orders-dashboard.html", "legacy result must expose the UI template");
     await legacyClient.close();
 
+    let elicitationCount = 0;
     const client = new Client(
       { name: "mcp-v2-http-acceptance", version: "0.1.0" },
       {
+        capabilities: { elicitation: { form: { applyDefaults: true } } },
+        inputRequired: { autoFulfill: true, maxRounds: 2 },
         supportedProtocolVersions: [MODERN_PROTOCOL_VERSION],
         versionNegotiation: { mode: { pin: MODERN_PROTOCOL_VERSION } },
       }
     );
+    client.setRequestHandler("elicitation/create", async () => {
+      elicitationCount += 1;
+      return { action: "accept", content: { confirmed: true } };
+    });
     await client.connect(transport("modern"));
     assert(client.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "modern client must negotiate 2026-07-28");
     assert(client.getProtocolEra() === "modern", "modern client must use the modern era");
     const discoverCapabilities = client.getDiscoverResult()?.capabilities;
     assert(discoverCapabilities?.tools?.listChanged === false, "modern discovery must not advertise Tool subscriptions");
     assert(discoverCapabilities.resources?.listChanged === false, "modern discovery must not advertise Resource subscriptions");
+    assert(
+      "com.kenvoai.mcp-v2.dynamic-entry" in (discoverCapabilities.extensions ?? {}),
+      "modern discovery must advertise the project-local dynamic entry extension",
+    );
+    const discoverResult = client.getDiscoverResult() as { ttlMs?: number; cacheScope?: string } | undefined;
+    assert(discoverResult?.ttlMs === 30_000 && discoverResult.cacheScope === "public", "server/discover must expose public cache hints");
     const tools = await client.listTools();
+    assert(
+      (tools as typeof tools & { ttlMs?: number; cacheScope?: string }).ttlMs === 30_000
+        && (tools as typeof tools & { cacheScope?: string }).cacheScope === "public",
+      "tools/list must expose public cache hints",
+    );
     for (const name of [
       "system.health",
       "orders.search",
@@ -114,6 +132,14 @@ async function main() {
       assert(tools.tools.some((tool) => tool.name === name), `missing ${name}`);
     }
     assert(tools.tools.length === 13, "modern client must discover exactly 13 tools");
+    const ordersSearch = tools.tools.find((tool) => tool.name === "orders.search");
+    const ordersSearchInput = ordersSearch?.inputSchema as Record<string, unknown> | undefined;
+    assert(
+      ordersSearchInput?.$defs !== undefined
+        && ordersSearchInput.allOf !== undefined
+        && ordersSearch?.outputSchema !== undefined,
+      "orders.search must expose composed JSON Schema 2020-12 input and output schemas",
+    );
     for (const name of [
       "system.health",
       "orders.search",
@@ -160,6 +186,16 @@ async function main() {
       (filteredDashboard.structuredContent as { orders?: unknown[] }).orders?.length === 1,
       "orders.dashboard must apply the status parameter",
     );
+    const traceparent = "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01";
+    const tracedHealth = await client.callTool({
+      name: "system.health",
+      arguments: {},
+      _meta: { traceparent },
+    });
+    assert(
+      tracedHealth._meta?.["com.kenvoai/traceparent"] === traceparent,
+      "Tool results must preserve W3C traceparent evidence",
+    );
     const prompts = await client.listPrompts();
     assert(prompts.prompts.length === 2, "modern client must discover exactly two Prompts");
     assert(prompts.prompts.some((prompt) => prompt.name === "order-review"), "order-review Prompt must be discoverable");
@@ -186,8 +222,9 @@ async function main() {
       ["orders.search", { runId: run.runId, query: "demo" }],
       ["skills.run", { runId: run.runId, skillId: "order-summary", orderId: "ord_demo_1001" }]
     ] as const) await client.callTool({ name, arguments: arguments_ });
-    const finish = await client.callTool({ name: "verification.finish", arguments: { runId: run.runId, confirmed: true } });
+    const finish = await client.callTool({ name: "verification.finish", arguments: { runId: run.runId } });
     assert((finish.structuredContent as { status: string }).status === "passed", "verification must pass after full chain");
+    assert(elicitationCount === 1, "verification.finish must complete one input_required elicitation round");
     await client.close();
 
     const autoClient = new Client(
@@ -239,6 +276,45 @@ async function main() {
     };
     assert(JSON.stringify(scenarioRegistry.scenarios) === JSON.stringify(SCENARIO_IDS), "scenario registry must preserve Scene 00–05 order");
     assert(scenarioRegistry.reports?.length === SCENARIO_IDS.length, "scenario registry must expose six independent report slots");
+    const toolsEntry = await fetch(`${baseUrl}/api/scenarios/tools/entry`).then((response) => response.json()) as {
+      discovery?: { tools?: string[]; extensions?: string[] };
+      cache?: { tools?: { ttlMs?: number } };
+      fields?: { binding?: string; options?: { value?: unknown }[] }[];
+    };
+    assert(toolsEntry.discovery?.tools?.length === 13, "dynamic entry must derive Tool options from live discovery");
+    assert(toolsEntry.cache?.tools?.ttlMs === 30_000, "dynamic entry must expose live cache hints");
+    assert(
+      toolsEntry.fields?.some((field) =>
+        field.binding === "selection"
+          && field.options?.some((option) => option.value === "orders.search")
+      ),
+      "dynamic Tool entry must include safe tools/list selections",
+    );
+    const invalidEntry = await fetch(`${baseUrl}/api/scenarios/tools/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ parameters: Object.fromEntries(Array.from({ length: 17 }, (_, index) => [`field${index}`, index])) }),
+    });
+    assert(invalidEntry.status === 400, "invalid dynamic entry must fail before running a scenario");
+    assert(
+      (await fetch(`${baseUrl}/api/scenarios/tools/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{",
+      })).status === 400,
+      "malformed dynamic entry JSON must return HTTP 400",
+    );
+    const dynamicProtocol = await fetch(`${baseUrl}/api/scenarios/protocol/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trigger: "api", protocolMode: "modern", parameters: {} }),
+    }).then((response) => response.json()) as ScenarioReport;
+    assert(
+      dynamicProtocol.status === "passed"
+        && dynamicProtocol.steps.length === 4
+        && !dynamicProtocol.route.includes("protocol.legacy"),
+      "modern-only dynamic entry must change the actual protocol route",
+    );
 
     const sceneRuns: ScenarioReport[] = [];
     for (const scenarioId of SCENARIO_IDS) {

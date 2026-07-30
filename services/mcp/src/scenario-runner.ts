@@ -1,5 +1,15 @@
 import {
+  SCENARIO_IDS,
+  scenarioEntryRequestSchema,
+  type ScenarioEntryRequest,
+  type ScenarioEntrySnapshot,
+  type ScenarioId,
+  type ScenarioReport,
+  type ScenarioStepResult,
+} from "@mcp-v2/shared";
+import {
   Client,
+  TRACEPARENT_META_KEY,
   type FetchLike,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
@@ -8,35 +18,14 @@ import {
   MODERN_PROTOCOL_VERSION,
   RUNTIME_CAPABILITIES,
 } from "./domain.ts";
+import {
+  describeScenarioEntry as loadScenarioEntryDefinition,
+  fallbackScenarioEntry,
+  resolveScenarioEntry,
+} from "./scenario-entry.ts";
 
-export const SCENARIO_IDS = [
-  "loop",
-  "protocol",
-  "tools",
-  "skills",
-  "mcp-apps",
-  "codex",
-] as const;
-
-export type ScenarioId = typeof SCENARIO_IDS[number];
-
-export interface ScenarioStepResult {
-  readonly id: string;
-  readonly title: string;
-  readonly status: "passed" | "failed" | "skipped";
-  readonly durationMs: number;
-  readonly detail: string;
-  readonly evidence: readonly string[];
-}
-
-export interface ScenarioReport {
-  readonly runId: string;
-  readonly scenarioId: ScenarioId;
-  readonly status: "passed" | "failed";
-  readonly startedAt: string;
-  readonly finishedAt: string;
-  readonly steps: readonly ScenarioStepResult[];
-}
+export { SCENARIO_IDS };
+export type { ScenarioId, ScenarioReport, ScenarioStepResult };
 
 type ToolCallResult = Awaited<ReturnType<Client["callTool"]>>;
 type StepOutput = { detail: string; evidence?: string[] };
@@ -51,14 +40,38 @@ function structured<T>(result: ToolCallResult): T {
   return result.structuredContent as T;
 }
 
-function createClient(name: string, mode: "modern" | "legacy" = "modern") {
-  return new Client(
+function traceMeta(entry: ScenarioEntrySnapshot) {
+  return { [TRACEPARENT_META_KEY]: entry.traceparent };
+}
+
+function createClient(
+  name: string,
+  mode: "modern" | "legacy" = "modern",
+  options: {
+    elicitation?: (message: string) => boolean;
+  } = {},
+) {
+  const client = new Client(
     { name, version: "0.1.0" },
     {
+      capabilities: options.elicitation === undefined ? {} : {
+        elicitation: { form: { applyDefaults: true } },
+      },
+      ...(options.elicitation === undefined ? {} : { inputRequired: {
+        autoFulfill: true,
+        maxRounds: 2,
+      } }),
       supportedProtocolVersions: [mode === "modern" ? MODERN_PROTOCOL_VERSION : LEGACY_PROTOCOL_VERSION],
       versionNegotiation: { mode: mode === "modern" ? { pin: MODERN_PROTOCOL_VERSION } : "legacy" },
     },
   );
+  if (options.elicitation !== undefined) {
+    client.setRequestHandler("elicitation/create", async (request) => ({
+      action: "accept" as const,
+      content: { confirmed: options.elicitation?.(request.params.message) ?? false },
+    }));
+  }
+  return client;
 }
 
 function createTransport(mcpUrl: URL, authToken?: string, fetchImpl?: FetchLike) {
@@ -123,7 +136,7 @@ function createStepRunner(steps: ScenarioStepResult[]): StepRunner {
   };
 }
 
-async function runLoopScenario(baseUrl: URL, step: StepRunner) {
+async function runLoopScenario(baseUrl: URL, step: StepRunner, entry: ScenarioEntrySnapshot) {
   let statusPayload: {
     ok?: boolean;
     protocolVersion?: string;
@@ -138,7 +151,11 @@ async function runLoopScenario(baseUrl: URL, step: StepRunner) {
     assert(response.ok, `Status endpoint returned HTTP ${response.status}`);
     statusPayload = await response.json() as typeof statusPayload;
     assert(statusPayload?.ok === true, "Status endpoint did not report ok");
-    return { detail: "MCP 服务状态可读", evidence: [`protocol=${statusPayload.protocolVersion}`] };
+    assert(entry.gates.every((gate) => gate.status === "passed"), "动态入口门禁未全部通过");
+    return {
+      detail: "MCP 服务状态与动态入口可读",
+      evidence: [`protocol=${statusPayload.protocolVersion}`, `focus=${entry.selection ?? "extensions"}`],
+    };
   });
   await step("loop.registry", "核对场景注册", async () => {
     const response = await fetch(new URL("/api/scenarios", baseUrl));
@@ -157,8 +174,11 @@ async function runLoopScenario(baseUrl: URL, step: StepRunner) {
     tools = ((await toolResponse.json()) as { tools?: unknown[] }).tools?.length ?? 0;
     prompts = ((await promptResponse.json()) as { prompts?: unknown[] }).prompts?.length ?? 0;
     skills = ((await skillResponse.json()) as { skills?: unknown[] }).skills?.length ?? 0;
-    assert(tools === 13 && prompts === 2 && skills === 2, "Capability catalog counts are inaccurate");
-    return { detail: "能力目录完整", evidence: [`tools=${tools}`, `prompts=${prompts}`, `skills=${skills}`] };
+    assert(tools === entry.discovery.tools.length && prompts === entry.discovery.prompts.length && skills === 2, "Capability catalog counts are inaccurate");
+    return {
+      detail: "HTTP 目录与 MCP 实时发现一致",
+      evidence: [`tools=${tools}`, `prompts=${prompts}`, `resources=${entry.discovery.resources.length}`, `skills=${skills}`],
+    };
   });
   await step("loop.matrix", "验证能力矩阵", async () => {
     assert(
@@ -166,17 +186,29 @@ async function runLoopScenario(baseUrl: URL, step: StepRunner) {
       "Runtime capability matrix is inaccurate",
     );
     return {
-      detail: "8/8 项目能力可用",
-      evidence: Object.entries(RUNTIME_CAPABILITIES).map(([name, value]) => `${name}=${String(value)}`),
+      detail: "8/8 项目能力与 v2 扩展可用",
+      evidence: [
+        ...Object.entries(RUNTIME_CAPABILITIES).map(([name, value]) => `${name}=${String(value)}`),
+        ...entry.discovery.extensions.map((name) => `extension=${name}`),
+      ],
     };
   });
   await step("loop.verdict", "形成闭环结论", async () => ({
-    detail: "状态、注册、目录与能力矩阵形成独立闭环",
-    evidence: ["scope=loop-only", "other-scenes=unchanged"],
+    detail: "状态、注册、实时目录、扩展与缓存语义形成独立闭环",
+    evidence: [
+      "scope=loop-only",
+      `discover-ttl=${entry.cache.discover.ttlMs}`,
+      `tools-ttl=${entry.cache.tools.ttlMs}`,
+    ],
   }));
 }
 
-async function runProtocolScenario(mcpUrl: URL, authToken: string | undefined, step: StepRunner) {
+async function runProtocolScenario(
+  mcpUrl: URL,
+  authToken: string | undefined,
+  step: StepRunner,
+  entry: ScenarioEntrySnapshot,
+) {
   const observed: { era: "modern" | "legacy"; status: number; contentType: string }[] = [];
   const recordingFetch = (era: "modern" | "legacy"): FetchLike => async (input, init) => {
     const response = await fetch(input, init);
@@ -190,34 +222,49 @@ async function runProtocolScenario(mcpUrl: URL, authToken: string | undefined, s
     return response;
   };
 
-  await step("protocol.modern", "Modern 握手", async () => {
-    const client = createClient("scenario-protocol-modern");
-    await client.connect(createTransport(mcpUrl, authToken, recordingFetch("modern")));
-    try {
-      assert(client.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "Modern negotiation failed");
-      await client.callTool({ name: "system.health", arguments: {} });
-      return { detail: "Modern Client 协商并调用成功", evidence: [`version=${MODERN_PROTOCOL_VERSION}`] };
-    } finally {
-      await client.close();
-    }
-  });
-  await step("protocol.legacy", "Legacy 握手", async () => {
-    const client = createClient("scenario-protocol-legacy", "legacy");
-    await client.connect(createTransport(mcpUrl, authToken, recordingFetch("legacy")));
-    try {
-      assert(client.getNegotiatedProtocolVersion() === LEGACY_PROTOCOL_VERSION, "Legacy negotiation failed");
-      await client.callTool({ name: "system.health", arguments: {} });
-      return { detail: "Legacy stateless Client 协商并调用成功", evidence: [`version=${LEGACY_PROTOCOL_VERSION}`] };
-    } finally {
-      await client.close();
-    }
-  });
+  if (entry.protocolMode !== "legacy") {
+    await step("protocol.modern", "Modern 握手", async () => {
+      const client = createClient("scenario-protocol-modern");
+      await client.connect(createTransport(mcpUrl, authToken, recordingFetch("modern")));
+      try {
+        assert(client.getNegotiatedProtocolVersion() === MODERN_PROTOCOL_VERSION, "Modern negotiation failed");
+        await client.callTool({ name: "system.health", arguments: {}, _meta: traceMeta(entry) });
+        return { detail: "Modern Client 协商并调用成功", evidence: [`version=${MODERN_PROTOCOL_VERSION}`] };
+      } finally {
+        await client.close();
+      }
+    });
+  }
+  if (entry.protocolMode !== "modern") {
+    await step("protocol.legacy", "Legacy 握手", async () => {
+      const client = createClient("scenario-protocol-legacy", "legacy");
+      await client.connect(createTransport(mcpUrl, authToken, recordingFetch("legacy")));
+      try {
+        assert(client.getNegotiatedProtocolVersion() === LEGACY_PROTOCOL_VERSION, "Legacy negotiation failed");
+        await client.callTool({ name: "system.health", arguments: {} });
+        return { detail: "Legacy stateless Client 协商并调用成功", evidence: [`version=${LEGACY_PROTOCOL_VERSION}`] };
+      } finally {
+        await client.close();
+      }
+    });
+  }
   await step("protocol.framing", "验证响应封装", async () => {
     const modern = observed.filter((item) => item.era === "modern" && item.status === 200);
     const legacy = observed.filter((item) => item.era === "legacy" && item.status === 200);
-    assert(modern.length > 0 && modern.every((item) => item.contentType.includes("application/json")), "Modern framing is not JSON");
-    assert(legacy.some((item) => item.contentType.includes("text/event-stream")), "Legacy framing did not use SSE");
-    return { detail: "响应封装与协议时代一致", evidence: ["modern=application/json", "legacy=text/event-stream"] };
+    if (entry.protocolMode !== "legacy") {
+      assert(modern.length > 0 && modern.every((item) => item.contentType.includes("application/json")), "Modern framing is not JSON");
+    }
+    if (entry.protocolMode !== "modern") {
+      assert(legacy.some((item) => item.contentType.includes("text/event-stream")), "Legacy framing did not use SSE");
+    }
+    return {
+      detail: "响应封装与动态协议入口一致",
+      evidence: [
+        `mode=${entry.protocolMode}`,
+        ...(entry.protocolMode === "legacy" ? [] : ["modern=application/json"]),
+        ...(entry.protocolMode === "modern" ? [] : ["legacy=text/event-stream"]),
+      ],
+    };
   });
   await step("protocol.boundary", "核对传输边界", async () => {
     const response = await fetch(new URL("/api/status", mcpUrl));
@@ -231,7 +278,12 @@ async function runProtocolScenario(mcpUrl: URL, authToken: string | undefined, s
   }));
 }
 
-async function runToolsScenario(mcpUrl: URL, authToken: string | undefined, step: StepRunner) {
+async function runToolsScenario(
+  mcpUrl: URL,
+  authToken: string | undefined,
+  step: StepRunner,
+  entry: ScenarioEntrySnapshot,
+) {
   await withModernClient(mcpUrl, authToken, "scenario-tools", async (client) => {
     let listedTools: Awaited<ReturnType<Client["listTools"]>>["tools"] = [];
     await step("tools.discover", "发现 13 个 Tool", async () => {
@@ -239,22 +291,44 @@ async function runToolsScenario(mcpUrl: URL, authToken: string | undefined, step
       assert(listedTools.length === 13, `Expected 13 Tools, received ${listedTools.length}`);
       return { detail: "13/13 Tool 已发现", evidence: listedTools.map((tool) => tool.name) };
     });
-    await step("tools.annotations", "检查安全注解", async () => {
+    await step("tools.annotations", "检查安全注解与 Schema", async () => {
       const readOnly = ["system.health", "orders.search", "orders.dashboard", "skills.discover", "skills.run", "verification.status", "tasks.status", "tasks.list", "tasks.result"];
       for (const name of readOnly) {
         const annotations = listedTools.find((tool) => tool.name === name)?.annotations;
         assert(annotations?.readOnlyHint === true && annotations.destructiveHint === false, `${name} annotations are unsafe`);
       }
-      return { detail: "只读 Tool 安全注解完整", evidence: [`readOnly=${readOnly.length}`] };
+      const ordersSearch = listedTools.find((tool) => tool.name === "orders.search");
+      const inputSchema = ordersSearch?.inputSchema as Record<string, unknown> | undefined;
+      assert(inputSchema?.$defs !== undefined && inputSchema.allOf !== undefined, "JSON Schema 2020-12 composition is missing");
+      assert(ordersSearch?.outputSchema !== undefined, "Tool outputSchema is missing");
+      return {
+        detail: "安全注解、组合输入 Schema 与输出 Schema 完整",
+        evidence: [`readOnly=${readOnly.length}`, "json-schema=2020-12", "outputSchema=true"],
+      };
     });
-    await step("tools.read", "执行只读调用", async () => {
-      const health = structured<{ ok?: boolean }>(await client.callTool({ name: "system.health", arguments: {} }));
-      const orders = structured<{ orders?: unknown[] }>(await client.callTool({ name: "orders.search", arguments: { query: "northwind" } }));
-      const dashboard = structured<{ orders?: unknown[] }>(await client.callTool({ name: "orders.dashboard", arguments: { view: "orders", status: "paid" } }));
-      assert(health.ok === true && orders.orders?.length === 1 && dashboard.orders?.length === 1, "Read-only Tool results are inaccurate");
-      return { detail: "健康、搜索与看板调用通过", evidence: ["health=true", "search=1", "dashboard=1"] };
+    await step("tools.read", "执行动态入口调用", async () => {
+      const selected = entry.selection ?? "system.health";
+      const argumentsByTool: Record<string, Record<string, unknown>> = {
+        "system.health": {},
+        "orders.search": { query: "northwind" },
+        "orders.dashboard": { view: "orders", status: "paid" },
+        "skills.discover": {},
+        "tasks.create": { orderId: "ord_demo_1001", completeImmediately: true },
+      };
+      const result = await client.callTool({
+        name: selected,
+        arguments: argumentsByTool[selected] ?? {},
+        _meta: traceMeta(entry),
+      });
+      assert(result.isError !== true && result.structuredContent !== undefined, `${selected} dynamic call failed`);
+      const meta = result._meta as Record<string, unknown> | undefined;
+      assert(meta?.["com.kenvoai/traceparent"] === entry.traceparent, "W3C traceparent was not preserved");
+      return {
+        detail: `${selected} 根据入口选择完成调用`,
+        evidence: [`selection=${selected}`, "traceparent=preserved"],
+      };
     });
-    await step("tools.tasks", "执行 Task 生命周期", async () => {
+    if (entry.parameters.taskLifecycle !== false) await step("tools.tasks", "执行应用任务生命周期", async () => {
       const pending = structured<{ taskId: string; status?: string }>(await client.callTool({
         name: "tasks.create",
         arguments: { orderId: "ord_demo_1001", completeImmediately: false },
@@ -267,7 +341,10 @@ async function runToolsScenario(mcpUrl: URL, authToken: string | undefined, step
       }));
       const result = structured<{ result?: { orders?: unknown[] } }>(await client.callTool({ name: "tasks.result", arguments: { taskId: completed.taskId } }));
       assert(cancelled.status === "cancelled" && result.result?.orders?.length === 1, "Task lifecycle failed");
-      return { detail: "Task 创建、取消和结果形成闭环", evidence: ["pending→cancelled", "completed→result"] };
+      return {
+        detail: "应用级 tasks.* Tool 创建、取消和结果形成闭环",
+        evidence: ["classification=application-tools", "pending→cancelled", "completed→result"],
+      };
     });
     await step("tools.verdict", "形成工具结论", async () => ({
       detail: "发现、安全注解、调用与 Task 生命周期验证闭环",
@@ -276,7 +353,12 @@ async function runToolsScenario(mcpUrl: URL, authToken: string | undefined, step
   });
 }
 
-async function runSkillsScenario(mcpUrl: URL, authToken: string | undefined, step: StepRunner) {
+async function runSkillsScenario(
+  mcpUrl: URL,
+  authToken: string | undefined,
+  step: StepRunner,
+  entry: ScenarioEntrySnapshot,
+) {
   await withModernClient(mcpUrl, authToken, "scenario-skills", async (client) => {
     await step("skills.prompts", "发现并渲染 Prompt", async () => {
       const prompts = await client.listPrompts();
@@ -292,13 +374,24 @@ async function runSkillsScenario(mcpUrl: URL, authToken: string | undefined, ste
       assert(ids.length === 2, "Skill discovery is incomplete");
       return { detail: "2/2 Skill 已发现", evidence: ids };
     });
-    await step("skills.execute", "执行订单摘要", async () => {
-      const value = structured<{ output?: { summary?: string } }>(await client.callTool({
+    await step("skills.execute", "执行动态 Skill", async () => {
+      const skillId = entry.selection ?? "order-summary";
+      const orderId = typeof entry.parameters.orderId === "string"
+        ? entry.parameters.orderId
+        : "ord_demo_1001";
+      const value = structured<{ skillId?: string; output?: { summary?: string; checklist?: string[] } }>(await client.callTool({
         name: "skills.run",
-        arguments: { skillId: "order-summary", orderId: "ord_demo_1001" },
+        arguments: {
+          skillId,
+          ...(skillId === "order-summary" ? { orderId } : {}),
+        },
+        _meta: traceMeta(entry),
       }));
-      assert(value.output?.summary === "ord_demo_1001: paid", "Order summary is inaccurate");
-      return { detail: "参数化 Skill 输出正确", evidence: ["ord_demo_1001: paid"] };
+      assert(value.skillId === skillId, "Dynamic Skill output is inaccurate");
+      return {
+        detail: `${skillId} 参数化输出正确`,
+        evidence: [`skill=${skillId}`, ...(value.output?.summary === undefined ? [] : [value.output.summary])],
+      };
     });
     await step("skills.input", "验证输入与错误路径", async () => {
       const checklist = structured<{ inputRequired?: boolean }>(await client.callTool({
@@ -316,7 +409,12 @@ async function runSkillsScenario(mcpUrl: URL, authToken: string | undefined, ste
   });
 }
 
-async function runMcpAppsScenario(mcpUrl: URL, authToken: string | undefined, step: StepRunner) {
+async function runMcpAppsScenario(
+  mcpUrl: URL,
+  authToken: string | undefined,
+  step: StepRunner,
+  entry: ScenarioEntrySnapshot,
+) {
   await withModernClient(mcpUrl, authToken, "scenario-mcp-apps", async (client) => {
     const uri = "ui://mcp-v2/orders-dashboard.html";
     let html = "";
@@ -340,13 +438,19 @@ async function runMcpAppsScenario(mcpUrl: URL, authToken: string | undefined, st
       return { detail: "initialize、Tool 回调和单文件边界通过", evidence: ["ui/initialize", "tools/call", "self-contained"] };
     });
     await step("apps.render", "调用动态看板", async () => {
+      const view = typeof entry.parameters.view === "string" ? entry.parameters.view : "orders";
+      const status = typeof entry.parameters.status === "string" ? entry.parameters.status : "paid";
       const result = await client.callTool({
         name: "orders.dashboard",
-        arguments: { view: "orders", status: "paid" },
+        arguments: { view, status },
+        _meta: traceMeta(entry),
       });
       const value = structured<{ parameters?: { view?: string; status?: string }; orders?: unknown[] }>(result);
-      assert(value.parameters?.view === "orders" && value.parameters.status === "paid" && value.orders?.length === 1, "Dashboard result is inaccurate");
-      return { detail: "动态参数与结构化结果通过", evidence: ["view=orders", "status=paid", "orders=1"] };
+      assert(value.parameters?.view === view && value.parameters.status === status, "Dashboard result is inaccurate");
+      return {
+        detail: "入口参数驱动 MCP App 结构化结果",
+        evidence: [`view=${view}`, `status=${status}`, `orders=${value.orders?.length ?? 0}`],
+      };
     });
     await step("apps.verdict", "形成应用结论", async () => ({
       detail: "元数据、Resource、Bridge 与 Tool 结果验证闭环",
@@ -355,8 +459,22 @@ async function runMcpAppsScenario(mcpUrl: URL, authToken: string | undefined, st
   });
 }
 
-async function runCodexScenario(mcpUrl: URL, authToken: string | undefined, step: StepRunner) {
-  await withModernClient(mcpUrl, authToken, "scenario-codex-session", async (client) => {
+async function runCodexScenario(
+  mcpUrl: URL,
+  authToken: string | undefined,
+  step: StepRunner,
+  entry: ScenarioEntrySnapshot,
+) {
+  const confirmation = entry.parameters.confirmation !== false;
+  let elicitationCount = 0;
+  const client = createClient("scenario-codex-session", "modern", {
+    elicitation: () => {
+      elicitationCount += 1;
+      return confirmation;
+    },
+  });
+  await client.connect(createTransport(mcpUrl, authToken));
+  try {
     let runId = "";
     await step("codex.start", "开始验证会话", async () => {
       const value = structured<{ runId?: string }>(await client.callTool({ name: "verification.start", arguments: {} }));
@@ -370,7 +488,7 @@ async function runCodexScenario(mcpUrl: URL, authToken: string | undefined, step
         ["skills.discover", { runId }],
         ["orders.search", { runId, query: "demo" }],
         ["skills.run", { runId, skillId: "verification-checklist" }],
-      ] as const) await client.callTool({ name, arguments: arguments_ });
+      ] as const) await client.callTool({ name, arguments: arguments_, _meta: traceMeta(entry) });
       return { detail: "四个限定 MCP 调用完成", evidence: ["system.health", "skills.discover", "orders.search", "skills.run"] };
     });
     await step("codex.evidence", "读取服务端证据", async () => {
@@ -384,53 +502,86 @@ async function runCodexScenario(mcpUrl: URL, authToken: string | undefined, step
     await step("codex.confirm", "确认并完成验证", async () => {
       const value = structured<{ status?: string; confirmationReceived?: boolean }>(await client.callTool({
         name: "verification.finish",
-        arguments: { runId, confirmed: true },
+        arguments: { runId },
+        _meta: traceMeta(entry),
       }));
-      assert(value.status === "passed" && value.confirmationReceived === true, "Verification did not pass");
-      return { detail: "人工确认进入服务端判定", evidence: ["confirmed=true", "status=passed"] };
+      const expectedStatus = confirmation ? "passed" : "failed";
+      assert(
+        value.status === expectedStatus
+          && value.confirmationReceived === confirmation
+          && elicitationCount === 1,
+        "Multi-round-trip verification result is inaccurate",
+      );
+      return {
+        detail: "input_required 经 HMAC requestState 重入并进入服务端判定",
+        evidence: [
+          "input_required=1",
+          "requestState=hmac",
+          `confirmed=${confirmation}`,
+          `status=${expectedStatus}`,
+        ],
+      };
     });
     await step("codex.verdict", "形成会话结论", async () => ({
       detail: "创建、调用、证据、确认与结果验证闭环",
       evidence: [runId, "scope=codex-only"],
     }));
-  });
+  } finally {
+    await client.close();
+  }
 }
 
 async function executeScenario(
   scenarioId: ScenarioId,
   mcpUrl: URL,
   authToken?: string,
+  entryRequest: ScenarioEntryRequest = scenarioEntryRequestSchema.parse({}),
 ): Promise<ScenarioReport> {
   const startedAt = new Date().toISOString();
   const runId = `scene_${scenarioId}_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  let entry: ScenarioEntrySnapshot;
+  try {
+    entry = resolveScenarioEntry(
+      await loadScenarioEntryDefinition(scenarioId, mcpUrl, authToken),
+      entryRequest,
+    );
+  } catch (error) {
+    entry = fallbackScenarioEntry(scenarioId, entryRequest, error);
+  }
   const steps: ScenarioStepResult[] = [];
   const step = createStepRunner(steps);
   switch (scenarioId) {
     case "loop":
-      await runLoopScenario(new URL("/", mcpUrl), step);
+      await runLoopScenario(new URL("/", mcpUrl), step, entry);
       break;
     case "protocol":
-      await runProtocolScenario(mcpUrl, authToken, step);
+      await runProtocolScenario(mcpUrl, authToken, step, entry);
       break;
     case "tools":
-      await runToolsScenario(mcpUrl, authToken, step);
+      await runToolsScenario(mcpUrl, authToken, step, entry);
       break;
     case "skills":
-      await runSkillsScenario(mcpUrl, authToken, step);
+      await runSkillsScenario(mcpUrl, authToken, step, entry);
       break;
     case "mcp-apps":
-      await runMcpAppsScenario(mcpUrl, authToken, step);
+      await runMcpAppsScenario(mcpUrl, authToken, step, entry);
       break;
     case "codex":
-      await runCodexScenario(mcpUrl, authToken, step);
+      await runCodexScenario(mcpUrl, authToken, step, entry);
       break;
   }
   const report: ScenarioReport = {
     runId,
     scenarioId,
-    status: steps.every((item) => item.status === "passed") && steps.length === 5 ? "passed" : "failed",
+    status: entry.gates.every((gate) => gate.status === "passed")
+      && steps.every((item) => item.status === "passed")
+      && steps.length > 0
+      ? "passed"
+      : "failed",
     startedAt,
     finishedAt: new Date().toISOString(),
+    entry,
+    route: steps.map((item) => item.id),
     steps,
   };
   return report;
@@ -442,7 +593,7 @@ export function isScenarioId(value: string): value is ScenarioId {
 
 export function createScenarioRunner() {
   const latestReports = new Map<ScenarioId, ScenarioReport>();
-  const activeRuns = new Map<ScenarioId, Promise<ScenarioReport>>();
+  const activeRuns = new Map<string, Promise<ScenarioReport>>();
 
   return {
     getScenarioReport(scenarioId: ScenarioId) {
@@ -451,18 +602,27 @@ export function createScenarioRunner() {
     listScenarioReports() {
       return SCENARIO_IDS.map((id) => ({ id, report: latestReports.get(id) ?? null }));
     },
-    runScenario(scenarioId: ScenarioId, mcpUrl: URL, authToken?: string) {
-      const active = activeRuns.get(scenarioId);
+    describeScenarioEntry(scenarioId: ScenarioId, mcpUrl: URL, authToken?: string) {
+      return loadScenarioEntryDefinition(scenarioId, mcpUrl, authToken);
+    },
+    runScenario(
+      scenarioId: ScenarioId,
+      mcpUrl: URL,
+      authToken?: string,
+      entryRequest: ScenarioEntryRequest = scenarioEntryRequestSchema.parse({}),
+    ) {
+      const activeKey = `${scenarioId}:${JSON.stringify(entryRequest)}`;
+      const active = activeRuns.get(activeKey);
       if (active !== undefined) return active;
-      const promise = executeScenario(scenarioId, mcpUrl, authToken)
+      const promise = executeScenario(scenarioId, mcpUrl, authToken, entryRequest)
         .then((report) => {
           latestReports.set(scenarioId, report);
           return report;
         })
         .finally(() => {
-          activeRuns.delete(scenarioId);
+          activeRuns.delete(activeKey);
         });
-      activeRuns.set(scenarioId, promise);
+      activeRuns.set(activeKey, promise);
       return promise;
     },
   };
