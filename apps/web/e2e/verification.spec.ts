@@ -7,6 +7,40 @@ async function focusRoute(page: Page, name: string) {
   await page.getByRole("button", { name, exact: true }).click();
 }
 
+async function findEdgesCrossingUnrelatedNodes(page: Page) {
+  return page.evaluate(() => {
+    const nodes = [...document.querySelectorAll<HTMLElement>(".react-flow__node")].map((element) => ({
+      id: element.dataset.id,
+      rect: element.getBoundingClientRect(),
+    }));
+
+    return [...document.querySelectorAll<SVGGElement>(".react-flow__edge")].flatMap((edge) => {
+      const endpoints = edge.getAttribute("aria-label")?.match(/^Edge from (.+) to (.+)$/);
+      const path = edge.querySelector<SVGPathElement>(".react-flow__edge-path");
+      if (endpoints === undefined || endpoints === null || path === null) return [];
+
+      const matrix = path.getScreenCTM();
+      if (matrix === null) return [];
+      const length = path.getTotalLength();
+      const collisions = nodes.filter(({ id, rect }) => {
+        if (id === endpoints[1] || id === endpoints[2]) return false;
+        for (let offset = 0; offset <= length; offset += 2) {
+          const point = path.getPointAtLength(offset).matrixTransform(matrix);
+          if (
+            point.x > rect.left + 1
+            && point.x < rect.right - 1
+            && point.y > rect.top + 1
+            && point.y < rect.bottom - 1
+          ) return true;
+        }
+        return false;
+      });
+
+      return collisions.map(({ id }) => `${edge.dataset.id} crosses ${id}`);
+    });
+  });
+}
+
 test("runs the selected dynamic route instead of a fixed six-scene chain", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("status", { name: "MCP 服务在线" })).toBeVisible();
@@ -61,6 +95,7 @@ test("exposes live route conditions and changes Tool content before execution", 
     await expect(page.locator(".statusbar-scene")).toContainText(`ROUTE ${scene}`);
     await expect(page.getByTestId("master-canvas").getByText(`${label}条件路由`, { exact: true })).toBeVisible();
     await expect(page.getByRole("contentinfo", { name: `${label}服务端证据` })).toBeVisible();
+    await expect.poll(() => findEdgesCrossingUnrelatedNodes(page)).toEqual([]);
   }
 
   await focusRoute(page, "02 · 工具");
@@ -120,10 +155,12 @@ test("renders protocol branches from the selected mode condition", async ({ page
   await expect(canvas.getByText("Legacy 兼容连接", { exact: true })).toBeVisible();
   await expect(canvas.getByText("mode ≠ legacy", { exact: true })).toBeVisible();
   await expect(canvas.getByText("mode ≠ modern", { exact: true })).toBeVisible();
+  await expect.poll(() => findEdgesCrossingUnrelatedNodes(page)).toEqual([]);
 
   await mode.selectOption("modern");
   await expect(canvas.getByText("Modern 自包含请求", { exact: true })).toBeVisible();
   await expect(canvas.getByText("Legacy 兼容连接", { exact: true })).toHaveCount(0);
+  await expect.poll(() => findEdgesCrossingUnrelatedNodes(page)).toEqual([]);
   const modernResponse = page.waitForResponse((response) =>
     response.url().endsWith("/api/scenarios/protocol/run") && response.request().method() === "POST"
   );
@@ -136,6 +173,7 @@ test("renders protocol branches from the selected mode condition", async ({ page
   await mode.selectOption("legacy");
   await expect(canvas.getByText("Modern 自包含请求", { exact: true })).toHaveCount(0);
   await expect(canvas.getByText("Legacy 兼容连接", { exact: true })).toBeVisible();
+  await expect.poll(() => findEdgesCrossingUnrelatedNodes(page)).toEqual([]);
 });
 
 test("keeps dynamic conditions and the matched route readable at 390px", async ({ page }) => {

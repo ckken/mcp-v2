@@ -96,9 +96,22 @@ function routePosition(index: number, count: number, compact: boolean) {
   if (compact) return { x: 44, y: 34 + index * 126 };
   const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
   return {
-    x: 425 + Math.cos(angle) * 305,
-    y: 250 + Math.sin(angle) * 205,
+    x: 425 + Math.cos(angle) * 315,
+    y: 250 + Math.sin(angle) * 215,
   };
+}
+
+function protocolPosition(id: string, hasBothBranches: boolean) {
+  const positions: Record<string, { x: number; y: number }> = {
+    discover: { x: 360, y: 12 },
+    route: { x: 360, y: 136 },
+    "protocol.modern": { x: hasBothBranches ? 590 : 360, y: 260 },
+    "protocol.legacy": { x: hasBothBranches ? 130 : 360, y: 260 },
+    "protocol.framing": { x: 360, y: 384 },
+    "protocol.boundary": { x: 210, y: 508 },
+    "protocol.verdict": { x: 650, y: 508 },
+  };
+  return positions[id] ?? { x: 360, y: 260 };
 }
 
 function oldPosition(index: number, compact: boolean) {
@@ -137,22 +150,42 @@ function RouteNodeCard({ data }: NodeProps<RouteNode>) {
         {data.state === "idle" && <CircleIcon />}
       </span>
       <Handle type="source" position={data.compact ? Position.Bottom : Position.Right} />
-      {data.compact && (
-        <>
-          <Handle
-            id="loop-target"
-            type="target"
-            position={Position.Right}
-            className="master-node-loop-handle"
-          />
-          <Handle
-            id="loop-source"
-            type="source"
-            position={Position.Right}
-            className="master-node-loop-handle"
-          />
-        </>
-      )}
+      <Handle
+        id="bypass-right-target"
+        type="target"
+        position={Position.Right}
+        className="master-node-bypass-handle"
+      />
+      <Handle
+        id="bypass-right-source"
+        type="source"
+        position={Position.Right}
+        className="master-node-bypass-handle"
+      />
+      <Handle
+        id="bypass-left-target"
+        type="target"
+        position={Position.Left}
+        className="master-node-bypass-handle"
+      />
+      <Handle
+        id="bypass-left-source"
+        type="source"
+        position={Position.Left}
+        className="master-node-bypass-handle"
+      />
+      <Handle
+        id="vertical-target"
+        type="target"
+        position={Position.Top}
+        className="master-node-bypass-handle"
+      />
+      <Handle
+        id="vertical-source"
+        type="source"
+        position={Position.Bottom}
+        className="master-node-bypass-handle"
+      />
     </article>
   );
 }
@@ -397,6 +430,8 @@ export function UnifiedWorkflow({
       },
       ...renderedSteps,
     ];
+    const hasBothProtocolBranches = sequence.some((step) => step.id === "protocol.modern")
+      && sequence.some((step) => step.id === "protocol.legacy");
     return sequence.map((step, index) => {
       const result = selectedReport?.steps.find((item) => item.id === step.id);
       const isRoute = step.id === "route";
@@ -404,7 +439,9 @@ export function UnifiedWorkflow({
       return {
         id: step.id,
         type: "route",
-        position: routePosition(index, sequence.length, compact),
+        position: selectedDefinition.id === "protocol" && !compact
+          ? protocolPosition(step.id, hasBothProtocolBranches)
+          : routePosition(index, sequence.length, compact),
         data: {
           index: String(index).padStart(2, "0"),
           eyebrow: isDiscover ? "LIVE CAPABILITIES" : isRoute ? "IF / THEN ROUTER" : "SERVER EVIDENCE",
@@ -475,12 +512,37 @@ export function UnifiedWorkflow({
             ? activeStepIndex < 0 && !closing
             : targetStepIndex === activeStepIndex
         );
+      const protocolVertical = selectedDefinition.id === "protocol"
+        && !compact
+        && [
+          "discover-route",
+          "route-modern",
+          "route-legacy",
+          "modern-framing",
+          "legacy-framing",
+          "protocol.framing-protocol.boundary",
+        ].includes(edge.id);
       return {
         ...edge,
         type: "step",
         pathOptions: { offset: compact ? 6 : 20 },
-        ...(compact && edge.target === "discover"
-          ? { sourceHandle: "loop-source", targetHandle: "loop-target" }
+        ...(protocolVertical
+          ? { sourceHandle: "vertical-source", targetHandle: "vertical-target" }
+          : edge.id === "route-legacy"
+          ? {
+              sourceHandle: "bypass-right-source",
+              targetHandle: "bypass-right-target",
+            }
+          : compact && edge.id === "modern-framing"
+            ? {
+                sourceHandle: "bypass-left-source",
+                targetHandle: "bypass-left-target",
+              }
+            : (compact || selectedDefinition.id === "protocol") && edge.target === "discover"
+              ? {
+                  sourceHandle: "bypass-right-source",
+                  targetHandle: "bypass-right-target",
+                }
           : {}),
         animated: active,
         className: sourceReport?.status === "failed"
