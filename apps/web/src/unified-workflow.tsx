@@ -92,13 +92,21 @@ function useCompactFlow() {
   return compact;
 }
 
-function routePosition(index: number, count: number, compact: boolean) {
-  if (compact) return { x: 44, y: 34 + index * 126 };
-  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
-  return {
-    x: 425 + Math.cos(angle) * 315,
-    y: 250 + Math.sin(angle) * 215,
-  };
+function compactRoutePosition(index: number) {
+  return { x: 44, y: 34 + index * 126 };
+}
+
+function matrixPosition(index: number, count: number) {
+  if (index === 0) return { x: 360, y: 12 };
+  if (index === 1) return { x: 360, y: 136 };
+  if (index === count - 1) return { x: 650, y: 508 };
+  const positions = [
+    { x: 130, y: 260 },
+    { x: 590, y: 260 },
+    { x: 360, y: 384 },
+    { x: 210, y: 508 },
+  ];
+  return positions[index - 2] ?? { x: 360, y: 384 };
 }
 
 function protocolPosition(id: string, hasBothBranches: boolean) {
@@ -439,9 +447,11 @@ export function UnifiedWorkflow({
       return {
         id: step.id,
         type: "route",
-        position: selectedDefinition.id === "protocol" && !compact
-          ? protocolPosition(step.id, hasBothProtocolBranches)
-          : routePosition(index, sequence.length, compact),
+        position: compact
+          ? compactRoutePosition(index)
+          : selectedDefinition.id === "protocol"
+            ? protocolPosition(step.id, hasBothProtocolBranches)
+            : matrixPosition(index, sequence.length),
         data: {
           index: String(index).padStart(2, "0"),
           eyebrow: isDiscover ? "LIVE CAPABILITIES" : isRoute ? "IF / THEN ROUTER" : "SERVER EVIDENCE",
@@ -512,22 +522,35 @@ export function UnifiedWorkflow({
             ? activeStepIndex < 0 && !closing
             : targetStepIndex === activeStepIndex
         );
-      const protocolVertical = selectedDefinition.id === "protocol"
-        && !compact
-        && [
-          "discover-route",
-          "route-modern",
-          "route-legacy",
-          "modern-framing",
-          "legacy-framing",
-          "protocol.framing-protocol.boundary",
-        ].includes(edge.id);
+      const sourcePosition = routeNodes.find((node) => node.id === edge.source)?.position;
+      const targetPosition = routeNodes.find((node) => node.id === edge.target)?.position;
+      const desktopHandles = sourcePosition === undefined || targetPosition === undefined
+        ? {}
+        : edge.target === "discover"
+          ? {
+              sourceHandle: "bypass-right-source",
+              targetHandle: "bypass-right-target",
+            }
+          : Math.abs(sourcePosition.y - targetPosition.y) < 8
+            ? targetPosition.x > sourcePosition.x
+              ? {
+                  sourceHandle: "bypass-right-source",
+                  targetHandle: "bypass-left-target",
+                }
+              : {
+                  sourceHandle: "bypass-left-source",
+                  targetHandle: "bypass-right-target",
+                }
+            : {
+                sourceHandle: "vertical-source",
+                targetHandle: "vertical-target",
+              };
       return {
         ...edge,
         type: "step",
         pathOptions: { offset: compact ? 6 : 20 },
-        ...(protocolVertical
-          ? { sourceHandle: "vertical-source", targetHandle: "vertical-target" }
+        ...(!compact
+          ? desktopHandles
           : edge.id === "route-legacy"
           ? {
               sourceHandle: "bypass-right-source",
@@ -538,7 +561,7 @@ export function UnifiedWorkflow({
                 sourceHandle: "bypass-left-source",
                 targetHandle: "bypass-left-target",
               }
-            : (compact || selectedDefinition.id === "protocol") && edge.target === "discover"
+            : edge.target === "discover"
               ? {
                   sourceHandle: "bypass-right-source",
                   targetHandle: "bypass-right-target",
