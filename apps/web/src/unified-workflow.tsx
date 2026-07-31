@@ -461,6 +461,7 @@ export function UnifiedWorkflow({
         );
       return {
         ...edge,
+        type: "step",
         animated: active,
         className: sourceReport?.status === "failed"
           ? "master-edge-failed"
@@ -502,6 +503,7 @@ export function UnifiedWorkflow({
     id: `${node.id}-${oldNodes[index + 1]!.id}`,
     source: node.id,
     target: oldNodes[index + 1]!.id,
+    type: "step",
     className: "master-edge-old",
     markerEnd: { type: MarkerType.ArrowClosed },
   })), [oldNodes]);
