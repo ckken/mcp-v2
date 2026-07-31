@@ -96,7 +96,7 @@ function routePosition(index: number, count: number, compact: boolean) {
   if (compact) return { x: 44, y: 34 + index * 126 };
   const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
   return {
-    x: 425 + Math.cos(angle) * 335,
+    x: 425 + Math.cos(angle) * 305,
     y: 250 + Math.sin(angle) * 205,
   };
 }
@@ -137,6 +137,22 @@ function RouteNodeCard({ data }: NodeProps<RouteNode>) {
         {data.state === "idle" && <CircleIcon />}
       </span>
       <Handle type="source" position={data.compact ? Position.Bottom : Position.Right} />
+      {data.compact && (
+        <>
+          <Handle
+            id="loop-target"
+            type="target"
+            position={Position.Right}
+            className="master-node-loop-handle"
+          />
+          <Handle
+            id="loop-source"
+            type="source"
+            position={Position.Right}
+            className="master-node-loop-handle"
+          />
+        </>
+      )}
     </article>
   );
 }
@@ -444,7 +460,7 @@ export function UnifiedWorkflow({
           id: `${closed[index]}-${closed[index + 1]}`,
           source: closed[index]!,
           target: closed[index + 1]!,
-          ...(index === closed.length - 2 ? { label: "Verdict → rediscover" } : {}),
+          ...(index === closed.length - 2 && !compact ? { label: "Verdict → rediscover" } : {}),
         });
       }
     }
@@ -462,6 +478,10 @@ export function UnifiedWorkflow({
       return {
         ...edge,
         type: "step",
+        pathOptions: { offset: compact ? 6 : 20 },
+        ...(compact && edge.target === "discover"
+          ? { sourceHandle: "loop-source", targetHandle: "loop-target" }
+          : {}),
         animated: active,
         className: sourceReport?.status === "failed"
           ? "master-edge-failed"
@@ -475,7 +495,7 @@ export function UnifiedWorkflow({
         markerEnd: { type: MarkerType.ArrowClosed },
       };
     });
-  }, [activeStepIndex, closing, renderedSteps, routeNodes, running, selectedDefinition.id, selectedReport]);
+  }, [activeStepIndex, closing, compact, renderedSteps, routeNodes, running, selectedDefinition.id, selectedReport]);
 
   const oldNodes = useMemo<RouteNode[]>(() => [
     ["OLD 01", "STATIC CONFIG", "客户端写死能力", "预设版本、方法与调用顺序"],
@@ -504,9 +524,10 @@ export function UnifiedWorkflow({
     source: node.id,
     target: oldNodes[index + 1]!.id,
     type: "step",
+    pathOptions: { offset: compact ? 6 : 20 },
     className: "master-edge-old",
     markerEnd: { type: MarkerType.ArrowClosed },
-  })), [oldNodes]);
+  })), [compact, oldNodes]);
 
   const selectedEvidence = selectedReport === null
     ? []
